@@ -4,20 +4,20 @@
 #include "Player.hpp"
 #include <string>
 
-namespace coup {
 
     class Judge : public Player {
     public:
         Judge(const std::string& name);
         ~Judge() override = default;
 
-        // יכולת לבטל שוחד
-        // bribingPlayer הוא מי שניסה לשלם שוחד
-        void blockBribe(Player& bribingPlayer);
+        // can undo a bribe
+        void undoBribe(Player& bribingPlayer);
 
-        // דריסה של התגובה לחרם
+        // override methods
+        std::string role() const override { return "Judge"; } // Returns the role of the player
         void onSanctionedBy(Player& attacker) override;
+        bool canUndoBribe() const override { return true; } // Judge can undo a bribe
     };
 
-} // namespace coup
+
 #endif // JUDGE_HPP

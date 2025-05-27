@@ -12,6 +12,13 @@ protected:
     bool is_my_turn = false;
     bool is_last_one_arrested = false;
     bool is_prevented_from_arresting = false; 
+
+    // Blocking system 
+    Player* lastActionPlayer = nullptr;
+    Player* coupTarget = nullptr; // for blocking coup
+    bool can_Block_Bribe = false;
+    bool can_Block_Tax = false;
+    bool can_Block_Coup = false;
 public:
     Player(const std::string& name);
 
@@ -26,17 +33,20 @@ public:
 
     //  setters and state changes
     void setCoins(int newCoins);    
-    void gotArrested();
+    void gotArrested(bool flag = true);// Marks the player as arrested, default to true
     void sanctionMe();
     void eliminateMe();
     void setTurn(bool val);
+    void gotPreventedFromArresting() { is_prevented_from_arresting = true; } // Marks the player as prevented from arresting
+    void restoreFromElimination() { is_alive = true; }
 
     // actions that can be performed by the player
+    virtual void onBeginTurn(); // called at the beginning of the player's turn, can be overridden by specific roles
     virtual void gather(); // any player can gather coins, unless sanctioned
-    virtual void tax();    // דיפולט: +2; Governor: +3; Governor can block
-    virtual void bribe();  // דיפולט: -4; Judge יכול לבטל
-    virtual void coup(std::shared_ptr<Player> target); // -7, מוציא שחקן מהמשחק; General can block
-    virtual void arrest(std::shared_ptr<Player> target); // רווח לעצמי, נזק למטרה ;spy can prevent
+    virtual void tax(Game& game);    // דיפולט: +2; Governor: +3; Governor can block
+    virtual void bribe(Game& game);  // דיפולט: -4; Judge יכול לבטל
+    virtual void coup(std::shared_ptr<Player> target, Game& game); // -7, מוציא שחקן מהמשחק; General can block
+    virtual void arrest(std::shared_ptr<Player> target, Game& game); // רווח לעצמי, נזק למטרה ;spy can prevent
     virtual void sanction(std::shared_ptr<Player> target); // -3, מסנדק שחקן
 
     // יכולות מיוחדות שנבדקות במשחק

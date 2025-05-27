@@ -3,6 +3,7 @@
 #include <iostream>
 #include <string>
 #include <memory>
+#include <Game.hpp>
 
 Player::Player(const std::string& name) // Constructor initializes the player's name and sets default values for coins and status flags
     : name(name), coins(0), is_sanctioned(false), is_alive(true), is_my_turn(false), is_last_one_arrested(false), is_prevented_from_arresting(false) {}
@@ -41,8 +42,8 @@ void Player::setCoins(int newCoins) { // Adds or subtracts coins from the player
     }
 }
 
-void Player::gotArrested() {// Marks the player as arrested, setting the last arrested flag to true
-    is_last_one_arrested = true;
+void Player::gotArrested(bool flag) {// Marks if the player is arrested or not, setting the last arrested flag accordingly
+    is_last_one_arrested = flag;
 }
 
 void Player::sanctionMe() {// Marks the player as sanctioned, preventing them from doing tax or gather
@@ -55,10 +56,19 @@ void Player::eliminateMe() { // eliminates the player from the game
 
 void Player::setTurn(bool my_turn) {// Sets whether it is the player's turn, allowing them to perform actions 
     is_my_turn = my_turn;
+    if (is_my_turn) {
+        onBeginTurn(); // Call onBeginTurn if it's the player's turn
+    }
 }
 
 //--------------------------------------------------------------------------------------------------------------------
-
+void Player::onBeginTurn() {
+      
+    if (coins >= 10)
+    {
+        std::cout << name << " has too many coins and must coup or lose coins."<< std::endl;
+    }
+}
 void Player::gather() {
     if (is_sanctioned) {
         throw std::runtime_error(name + " is sanctioned and can't gather.");
@@ -68,24 +78,31 @@ void Player::gather() {
     }
 }
 
-void Player::tax() {
+void Player::tax(Game& game) {
     if (is_sanctioned) {
         throw std::runtime_error(name + " is sanctioned and can't tax.");
     }
     else {
         setCoins(2); // default tax amount; governor override to earn 3
+        
+        // Record for potential blocking
+        game.recordTax(this);
+        std::cout << name << " performed tax (can be blocked by Governor)" << std::endl;
     } //Governor can block $$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$
 }
 
-void Player::bribe() { 
+void Player::bribe(Game& game) { 
     if (coins < 4) {
         throw std::runtime_error(name + " does not have enough coins to bribe.");
     }
     setCoins(-4);
+    //record the bribe action in the game for potential blocking by Judge
+    game.recordBribe(this);
+    std::cout << name << " performed bribe (can be blocked by Judge)" << std::endl;
     // judge can undo, the coins doesn't return to the player $$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$
 } //if Judge didn't undo -gives the player another 2 turns
 
-void Player::arrest(std::shared_ptr<Player> target) { //spy can prevent
+void Player::arrest(std::shared_ptr<Player> target, Game& game) { //spy can prevent
     //if spy prevented the arrest, do nothing
     if( isPreventedFromArresting() ) {
         throw std::runtime_error("Spy prevented so cannot arresting other players."); 
@@ -98,21 +115,18 @@ void Player::arrest(std::shared_ptr<Player> target) { //spy can prevent
     if (target->isLastOneArrested()) {
         throw std::runtime_error("player cannot be arrested twice in a row.");
     }
-    target->gotArrested(); // Mark the target as arrested
+
+    game.clearLastArrestedFlag();
+
+    target->gotArrested(true); // Mark the target as arrested
 
     target->onArrestedBy(*this);
     this->setCoins(1);
     target->setCoins(-1);  // will be overridden by specific roles
 
-    /*if (target->role() != "General") {// the 1 coin returns to the general(=do nothing);
-        if (target->role() == "Merchant") {//$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$ using role()
-            target->setCoins(-2);
-            this->setCoins(0); // Merchant loses 2 coins, arresting player gains nothing
-        }
-        else {
-            this->setCoins(1);
-            target->setCoins(-1); // All other roles lose 1 coin, arresting player gains 1 coin
-        }
+    /*
+    צריך לשנות את הסמן של האחרון שנעצר
+    $$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$
     }*/
 
 }
@@ -129,16 +143,9 @@ void Player::sanction(std::shared_ptr<Player> target) {
     setCoins(-3);
     target->sanctionMe();
     target->onSanctionedBy(*this); // will be overridden by specific roles
-        
-    /*if (target->role() == "Baron") { // If the target is a Baron, he gain 1 coin
-        target->setCoins(1);
-    }
-    if (target->role() == "Judge") { // If the target is a Judge, the player who sanctioned him loses 1 more coin
-        this->setCoins(-1);
-    }*/
 }
 
-void Player::coup(std::shared_ptr<Player> target) {
+void Player::coup(std::shared_ptr<Player> target, Game& game) {
     if (!target->isAlive()) {
         throw std::runtime_error("Cannot coup a non-active player.");
     }
@@ -151,6 +158,10 @@ void Player::coup(std::shared_ptr<Player> target) {
     target->eliminateMe();
     // General can block the coup, if the coup is blocked, the target remains in the game and the player loses 7 coins
     // If the coup is successful, the target is eliminated from the game $$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$44444
+    // Record for potential blocking
+    game.recordCoup(this, target.get());
+    std::cout << name << " performed coup on " << target->getName() 
+              << " (can be blocked by General)" << std::endl;
 }
 //--------------------------------------------------------------------------------------------------------------------
 
@@ -167,7 +178,12 @@ bool Player::canPreventArrest() const {
     return false; // Default implementation, can be overridden by specific roles
 }
 void Player::onSanctionedBy(Player& by) {
-    // Default implementation does nothing, can be overridden by specific roles
+    if (is_sanctioned) {
+        throw std::runtime_error(name + " is already sanctioned.");
+    }
+    is_sanctioned = true; // Mark as sanctioned
+
+    // Default implementation, can be overridden by specific roles
 }
 void Player::onArrestedBy(Player& by) {
 
@@ -178,3 +194,4 @@ std::string Player::role() const {
 }
 
 Player::~Player() = default; // Default destructor, can be overridden by derived classes if needed
+
