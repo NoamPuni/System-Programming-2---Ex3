@@ -35,36 +35,71 @@ int main() {
 
     // יצירת חלון
     sf::RenderWindow window(sf::VideoMode(800, 600), "Coup Game - GUI");
+    sf::RectangleShape gatherButton(sf::Vector2f(120, 40));
+gatherButton.setFillColor(sf::Color::Blue);
+gatherButton.setPosition(50, 500);
+
+sf::RectangleShape taxButton(sf::Vector2f(120, 40));
+taxButton.setFillColor(sf::Color::Green);
+taxButton.setPosition(200, 500);
+
+sf::Text gatherText = createText("Gather", font, 18, 65, 510);
+sf::Text taxText = createText("Tax", font, 18, 235, 510);
 
     while (window.isOpen()) {
         sf::Event event;
         while (window.pollEvent(event)) {
             if (event.type == sf::Event::Closed)
                 window.close();
+            }
+            if (event.type == sf::Event::MouseButtonPressed) {
+    sf::Vector2f mousePos(event.mouseButton.x, event.mouseButton.y);
+    Player* currentPlayer = game.getCurrentPlayer();
+
+    try {
+        if (gatherButton.getGlobalBounds().contains(mousePos)) {
+            currentPlayer->gather();
+            std::cout << currentPlayer->getName() << " gathered 1 coin.\n";
+            game.nextTurn();
         }
-
-        window.clear(sf::Color::Black);
-
-        // תור נוכחי
-        std::string currentTurn = "Current Turn: " + game.turn();
-        sf::Text turnText = createText(currentTurn, font, 24, 50, 20);
-        window.draw(turnText);
-
-        // שחקנים פעילים
-        std::vector<std::string> activePlayers = game.players();
-        float y = 80;
-        for (Player* player : {p1, p2}) {
-            std::ostringstream oss;
-            oss << player->getName() << " - Coins: " << player->getCoins();
-            sf::Text playerText = createText(oss.str(), font, 20, 50, y);
-            window.draw(playerText);
-            y += 40;
+        else if (taxButton.getGlobalBounds().contains(mousePos)) {
+            currentPlayer->tax(game);
+            std::cout << currentPlayer->getName() << " performed tax.\n";
+            game.nextTurn();
         }
-
-        window.display();
+    } catch (const std::exception& e) {
+        std::cerr << "Error: " << e.what() << std::endl;
     }
 
-    delete p1;
-    delete p2;
-    return 0;
+}
+        window.clear(sf::Color::Black); // 🟢 קודם כל מנקים
+
+    // draw game status
+    std::string currentTurn = "Current Turn: " + game.turn();
+    sf::Text turnText = createText(currentTurn, font, 24, 50, 20);
+    window.draw(turnText);
+
+    std::vector<std::string> activePlayers = game.players();
+    float y = 80;
+    for (Player* player : {p1, p2}) {
+        std::ostringstream oss;
+        oss << player->getName() << " - Coins: " << player->getCoins();
+        sf::Text playerText = createText(oss.str(), font, 20, 50, y);
+        window.draw(playerText);
+        y += 40;
+    }
+
+    // draw buttons after text
+    window.draw(gatherButton);
+    window.draw(gatherText);
+    window.draw(taxButton);
+    window.draw(taxText);
+
+    window.display(); // 🟢 תמיד בסוף
+
+        }
+
+        delete p1;
+        delete p2;
+        return 0;
 }
