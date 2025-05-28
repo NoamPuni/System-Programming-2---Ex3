@@ -1,4 +1,3 @@
-#pragma once
 #include "Merchant.hpp"
 #include "Player.hpp"
 #include <stdexcept>
@@ -6,9 +5,6 @@
 #include <iostream>
 Merchant::Merchant(const std::string& name) : Player(name) {
     // Constructor initializes the Merchant with a name
-}
-Merchant::~Merchant() {
-    // Destructor for Merchant
 }
 void Merchant::onBeginTurn() {
     if (coins >= 3) {
