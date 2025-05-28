@@ -17,5 +17,8 @@ void Baron::onSanctionedBy(Player& attacker) {
     attacker.setCoins(-1);// the player who sanctioned the Baron loses more 1 coin
     setCoins(1); // when sanctioned, the Baron gets more 1 coin
 }
+std::string Baron::role() const {
+    return "Baron"; // Returns the role of the player
+}
 
 

@@ -8,9 +8,6 @@
 Governor::Governor(const std::string& name) : Player(name) {
     // Constructor initializes the Governor with a name
 }
-Governor::~Governor() {
-    // Destructor for Governor
-}
 void Governor::tax(Game& game) {
         if (is_sanctioned) {
             throw std::runtime_error(name + " is sanctioned and can't tax.");
@@ -24,4 +21,7 @@ void Governor::blockTax(Game& game) {
         throw std::runtime_error(name + " is not alive and cannot block tax.");
     }
     game.tryBlockTax(this);
+}
+std::string Governor::role() const {
+    return "Governor"; // Returns the role of the player
 }

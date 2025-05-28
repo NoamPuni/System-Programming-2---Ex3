@@ -11,3 +11,6 @@ void onSanctionedBy(Player& attacker) {
     // If the target is a Judge, the player who sanctioned him loses 1 more coin
         attacker.setCoins(-1);
     }
+std::string Judge::role() const {
+    return "Judge"; // Returns the role of the player
+}

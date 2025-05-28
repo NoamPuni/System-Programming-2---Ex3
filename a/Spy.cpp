@@ -21,3 +21,6 @@ void Spy::preventArrest(Player& targetPlayer) {
     }
     targetPlayer.gotPreventedFromArresting(); // Mark the target player as prevented from arresting
 }
+std::string Spy::role() const {
+    return "Spy"; // Returns the role of the player
+}
