@@ -1,4 +1,3 @@
-#pragma once
 #include "Baron.hpp"
 #include "Player.hpp"
 #include <stdexcept>
@@ -6,9 +5,6 @@
 #include <iostream>
 Baron::Baron(const std::string& name) : Player(name) {
     // Constructor initializes the Baron with a name
-}
-Baron::~Baron() {
-    // Destructor for Baron
 }
 void Baron::invest() {
         setCoins(3); // Example: Baron can invest and gain 3 coins
