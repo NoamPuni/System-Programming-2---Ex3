@@ -55,7 +55,7 @@ int main() {
         float y = 80;
         for (Player* player : {p1, p2}) {
             std::ostringstream oss;
-            oss << player->getName() << " (" << player->role() << ") - Coins: " << player->getCoins();
+            oss << player->getName() << " - Coins: " << player->getCoins();
             sf::Text playerText = createText(oss.str(), font, 20, 50, y);
             window.draw(playerText);
             y += 40;

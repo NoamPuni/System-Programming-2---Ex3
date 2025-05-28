@@ -13,7 +13,7 @@
         void revealCoins(Player& targetPlayer) const; // reveals the number of coins of targetPlayer
         void preventArrest(Player& targetPlayer);    // prevents targetPlayer from using arrest on their next turn
         bool canPreventArrest() const override {return true;} // Spy can always prevent arrest
-        std::string role() const override{return "Spy";} // Returns the role of the player
+        std::string role() const override; // Returns the role of the player
     };
 
 

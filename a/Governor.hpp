@@ -14,7 +14,7 @@ public:
 
     void tax(Game& game) override; // Governor can tax 3 coins
     void blockTax(Game& game); // Governor can block tax actions
-    std::string role() const override { return "Governor"; } // Returns the role of the player
+    std::string role() const override; // Returns the role of the player
     bool canBlockTax() const override { return true; } // Governor can block tax actions
 };
 

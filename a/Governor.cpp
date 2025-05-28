@@ -1,4 +1,3 @@
-#pragma once
 #include "Governor.hpp"
 #include "Player.hpp"
 #include "Game.hpp"
@@ -25,3 +24,4 @@ void Governor::blockTax(Game& game) {
 std::string Governor::role() const {
     return "Governor"; // Returns the role of the player
 }
+

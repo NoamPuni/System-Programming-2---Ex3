@@ -11,6 +11,7 @@ void General::onArrestedBy(Player& attacker) {
     setCoins(0); // General doesn't lose coins when arrested
     
 }
+
 std::string General::role() const {
     return "General"; // Returns the role of the player
 }

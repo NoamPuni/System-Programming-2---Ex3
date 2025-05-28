@@ -14,7 +14,7 @@
         void undoBribe(Player& bribingPlayer);
 
         // override methods
-        std::string role() const override { return "Judge"; } // Returns the role of the player
+        std::string role() const override; // Returns the role of the player
         void onSanctionedBy(Player& attacker) override;
         bool canUndoBribe() const override { return true; } // Judge can undo a bribe
     };

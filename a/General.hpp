@@ -13,7 +13,7 @@ class General : public Player {
 
         bool canBlockCoup() const override { return true; } // General can block coups
         //override methods
-        std::string role() const override { return "General"; } // Returns the role of the player
+        std::string role() const override; // Returns the role of the player
         void onArrestedBy(Player& attacker) override;
     };
 
