@@ -56,7 +56,7 @@ public:
     virtual void sanction(Player* target); // -3, מסנדק שחקן
 
     // יכולות מיוחדות שנבדקות במשחק
-    virtual std::string role() const; // returns the role of the player, e.g., "Governor", "Judge", etc.
+    virtual std::string role() const = 0; // returns the role of the player, e.g., "Governor", "Judge", etc.
 
     // special abilities that can be overridden by specific roles
     virtual bool canBlockCoup() const;

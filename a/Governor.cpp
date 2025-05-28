@@ -24,4 +24,7 @@ void Governor::blockTax(Game& game) {
 std::string Governor::role() const {
     return "Governor"; // Returns the role of the player
 }
+bool Governor::canBlockTax() const {
+    return true; // Governor can block tax actions
+}
 

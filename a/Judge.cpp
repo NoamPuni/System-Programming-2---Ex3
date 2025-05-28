@@ -6,8 +6,8 @@
 Judge::Judge(const std::string& name) : Player(name) {
     // Constructor initializes the Judge with a name
 }
-void undoBribe(Player& bribingPlayer){}
-void onSanctionedBy(Player& attacker) {
+void Judge::undoBribe(Player& bribingPlayer){}
+void Judge::onSanctionedBy(Player& attacker) {
     // If the target is a Judge, the player who sanctioned him loses 1 more coin
         attacker.setCoins(-1);
     }

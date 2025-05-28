@@ -10,12 +10,12 @@ class Governor : public Player
 
 public:
     Governor(const std::string& name);
-    ~Governor();
+    ~Governor() = default;
 
     void tax(Game& game) override; // Governor can tax 3 coins
     void blockTax(Game& game); // Governor can block tax actions
     std::string role() const override; // Returns the role of the player
-    bool canBlockTax() const override { return true; } // Governor can block tax actions
+    bool canBlockTax() const override; // Governor can block tax actions
 };
 
 #endif
