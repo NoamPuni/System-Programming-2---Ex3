@@ -59,7 +59,7 @@ public:
     void giveExtraTurns(int turns = 2); // gives extra turns to the player who bribed
     bool hasExtraTurns() const { return extraTurnsRemaining > 0; }
     int getExtraTurnsRemaining() const { return extraTurnsRemaining; }
-
+    
     // Prevent copy constructor and assignment operator
     Game(const Game&) = delete;
     Game& operator=(const Game&) = delete;

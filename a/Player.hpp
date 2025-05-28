@@ -3,6 +3,9 @@
 #include <memory>
 #include <stdexcept>
 
+class Game; // forward declaration
+
+
 class Player {
 protected:
     std::string name;
@@ -19,6 +22,7 @@ protected:
     bool can_Block_Bribe = false;
     bool can_Block_Tax = false;
     bool can_Block_Coup = false;
+    int sanctionTurnsRemaining = 0;
 public:
     Player(const std::string& name);
 
@@ -39,15 +43,17 @@ public:
     void setTurn(bool val);
     void gotPreventedFromArresting() { is_prevented_from_arresting = true; } // Marks the player as prevented from arresting
     void restoreFromElimination() { is_alive = true; }
+    void releaseSanction();
+     void setSanctionTurns(int turns=1);
 
     // actions that can be performed by the player
     virtual void onBeginTurn(); // called at the beginning of the player's turn, can be overridden by specific roles
     virtual void gather(); // any player can gather coins, unless sanctioned
     virtual void tax(Game& game);    // דיפולט: +2; Governor: +3; Governor can block
     virtual void bribe(Game& game);  // דיפולט: -4; Judge יכול לבטל
-    virtual void coup(std::shared_ptr<Player> target, Game& game); // -7, מוציא שחקן מהמשחק; General can block
-    virtual void arrest(std::shared_ptr<Player> target, Game& game); // רווח לעצמי, נזק למטרה ;spy can prevent
-    virtual void sanction(std::shared_ptr<Player> target); // -3, מסנדק שחקן
+    virtual void coup(Player* target, Game& game); // -7, מוציא שחקן מהמשחק; General can block
+    virtual void arrest(Player* target, Game& game); // רווח לעצמי, נזק למטרה ;spy can prevent
+    virtual void sanction(Player* target); // -3, מסנדק שחקן
 
     // יכולות מיוחדות שנבדקות במשחק
     virtual std::string role() const= 0; // returns the role of the player, e.g., "Governor", "Judge", etc.

@@ -99,6 +99,11 @@ void Game::nextTurn() {
     
     if (aliveCount <= 1) {
         gameEnded = true;
+        if (aliveCount == 1) {
+            std::cout << "Game ended! Winner: " << winner() << std::endl;
+        } else {
+            std::cout << "Game ended in a draw - no players remaining!" << std::endl;
+        }
     }
     // Clear blockable actions when switching to new player
     clearBlockableActions();
@@ -171,7 +176,7 @@ void Game::recordBribe(Player* player) {
     std::cout << player->getName() << " gets 2 extra turns from bribe!" << std::endl;
 }
 
-void Game::giveExtraTurns(int turns = 2) {
+void Game::giveExtraTurns(int turns) {
     extraTurnsRemaining += turns;
 }
 
@@ -182,8 +187,8 @@ void Game::recordTax(Player* player) {
 
 void Game::recordCoup(Player* player, Player* target) {
     lastActionPlayer = player;
+    coupTarget = target;
     canBlockCoup = true;
-    // יכול לשמור גם את המטרה אם צריך
 }
 
 bool Game::tryBlockBribe(Player* blocker) {
@@ -221,7 +226,10 @@ bool Game::tryBlockCoup(Player* blocker) {
         return false;
     }
     
-    // Undo the coup - this is more complex, need to restore eliminated player
+    // restore the target player from elimination
+    if (coupTarget != nullptr) {
+        coupTarget->restoreFromElimination();
+    }
     lastActionPlayer->setCoins(7); // Return the 7 coins
     // Need to restore target player - need to store target reference
     std::cout << blocker->getName() << " blocked " << lastActionPlayer->getName() 
@@ -243,6 +251,24 @@ void Game::clearLastArrestedFlag() {
         player->gotArrested(false);
     }
 }
+
+size_t Game::getAlivePlayerCount() const {
+    size_t count = 0;
+    for (const Player* player : _players) {
+        if (player->isAlive()) {
+            count++;
+        }
+    }
+    return count;
+}
+
+Player* Game::getCurrentPlayer() const {
+    if (_players.empty() || gameEnded) {
+        return nullptr;
+    }
+    return _players[currentTurn];
+}
+
 // דוגמת שימוש במשחק:
 /*
 // דוגמה 1: שוחד

@@ -48,6 +48,7 @@ void Player::gotArrested(bool flag) {// Marks if the player is arrested or not, 
 
 void Player::sanctionMe() {// Marks the player as sanctioned, preventing them from doing tax or gather
     is_sanctioned = true;
+    setSanctionTurns(1);
 }
 
 void Player::eliminateMe() { // eliminates the player from the game
@@ -61,9 +62,22 @@ void Player::setTurn(bool my_turn) {// Sets whether it is the player's turn, all
     }
 }
 
+void Player::setSanctionTurns(int turns) {
+    sanctionTurnsRemaining = turns;
+    is_sanctioned = (turns > 0);
+}
+
 //--------------------------------------------------------------------------------------------------------------------
 void Player::onBeginTurn() {
-      
+    if (sanctionTurnsRemaining > 0) {
+        sanctionTurnsRemaining--;
+        if (sanctionTurnsRemaining == 0) {
+            is_sanctioned = false;
+            std::cout << name << " is released from sanction." << std::endl;
+        } else {
+            std::cout << name << " is still sanctioned for this turn." << std::endl;
+        }
+    }  
     if (coins >= 10)
     {
         std::cout << name << " has too many coins and must coup or lose coins."<< std::endl;
@@ -91,7 +105,7 @@ void Player::tax(Game& game) {
     } //Governor can block $$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$
 }
 
-void Player::bribe(Game& game) { 
+void Player::bribe(Game& game) {
     if (coins < 4) {
         throw std::runtime_error(name + " does not have enough coins to bribe.");
     }
@@ -102,7 +116,7 @@ void Player::bribe(Game& game) {
     // judge can undo, the coins doesn't return to the player $$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$
 } //if Judge didn't undo -gives the player another 2 turns
 
-void Player::arrest(std::shared_ptr<Player> target, Game& game) { //spy can prevent
+void Player::arrest(Player* target, Game& game) { //spy can prevent
     //if spy prevented the arrest, do nothing
     if( isPreventedFromArresting() ) {
         throw std::runtime_error("Spy prevented so cannot arresting other players."); 
@@ -124,14 +138,9 @@ void Player::arrest(std::shared_ptr<Player> target, Game& game) { //spy can prev
     this->setCoins(1);
     target->setCoins(-1);  // will be overridden by specific roles
 
-    /*
-    צריך לשנות את הסמן של האחרון שנעצר
-    $$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$
-    }*/
-
 }
 
-void Player::sanction(std::shared_ptr<Player> target) {
+void Player::sanction(Player* target) {
     if (!target->isAlive()) {
         throw std::runtime_error("Can't sanction non active player.");
     }
@@ -145,7 +154,7 @@ void Player::sanction(std::shared_ptr<Player> target) {
     target->onSanctionedBy(*this); // will be overridden by specific roles
 }
 
-void Player::coup(std::shared_ptr<Player> target, Game& game) {
+void Player::coup(Player* target, Game& game) {
     if (!target->isAlive()) {
         throw std::runtime_error("Cannot coup a non-active player.");
     }
@@ -159,7 +168,7 @@ void Player::coup(std::shared_ptr<Player> target, Game& game) {
     // General can block the coup, if the coup is blocked, the target remains in the game and the player loses 7 coins
     // If the coup is successful, the target is eliminated from the game $$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$44444
     // Record for potential blocking
-    game.recordCoup(this, target.get());
+    game.recordCoup(this, target);
     std::cout << name << " performed coup on " << target->getName() 
               << " (can be blocked by General)" << std::endl;
 }
@@ -189,9 +198,3 @@ void Player::onArrestedBy(Player& by) {
 
     // Default implementation does nothing, can be overridden by specific roles
 }
-std::string Player::role() const {
-    // Default implementation does nothing, can be overridden by derived classes
-}
-
-Player::~Player() = default; // Default destructor, can be overridden by derived classes if needed
-
