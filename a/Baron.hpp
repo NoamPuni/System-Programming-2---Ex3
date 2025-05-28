@@ -11,7 +11,7 @@ public:
     ~Baron() override = default;
 
     void invest(); // Baron can invest
-    std::string Baron::role() const {
+    std::string role() const {
         return "Baron"; // Returns the role of the player
     }
     //override methods
