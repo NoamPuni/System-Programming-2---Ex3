@@ -1,4 +1,3 @@
-#pragma once
 #include "Spy.hpp"
 #include "Player.hpp"
 #include <stdexcept>
@@ -6,9 +5,6 @@
 #include <iostream>
 Spy::Spy(const std::string& name) : Player(name) {
     // Spy-specific initialization can go here if needed
-}
-Spy::~Spy() {
-    //destructor
 }
 void Spy::revealCoins(Player& targetPlayer) const {
     if (!targetPlayer.isAlive()) {
