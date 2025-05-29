@@ -11,6 +11,7 @@ private:
     std::vector<Player*> _players;
     size_t currentTurn;
     bool gameEnded;
+    std::string _winnerName;
 
     // Blocking system - used to manage actions that can be blocked or undone
     Player* lastActionPlayer = nullptr;

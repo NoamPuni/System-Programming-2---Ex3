@@ -51,9 +51,9 @@ public:
     virtual void gather(); // any player can gather coins, unless sanctioned
     virtual void tax(Game& game);    // דיפולט: +2; Governor: +3; Governor can block
     virtual void bribe(Game& game);  // דיפולט: -4; Judge יכול לבטל
-    virtual void coup(Player* target, Game& game); // -7, מוציא שחקן מהמשחק; General can block
+    virtual bool coup(Player* target, Game& game); // -7, מוציא שחקן מהמשחק; General can block
     virtual bool arrest(Player* target, Game& game); // רווח לעצמי, נזק למטרה ;spy can prevent
-    virtual void sanction(Player* target); // -3, מסנדק שחקן
+    virtual bool sanction(Player* target); // -3, מסנדק שחקן
 
     // יכולות מיוחדות שנבדקות במשחק
     virtual std::string role() const = 0; // returns the role of the player, e.g., "Governor", "Judge", etc.

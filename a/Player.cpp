@@ -47,9 +47,9 @@ void Player::gotArrested(bool flag) {// Marks if the player is arrested or not, 
     is_last_one_arrested = flag;
 }
 
-void Player::sanctionMe() {// Marks the player as sanctioned, preventing them from doing tax or gather
+void Player::sanctionMe() {
     is_sanctioned = true;
-    setSanctionTurns(1);
+    setSanctionTurns(1); // הגדרת משך החרם (למשל, לתור אחד כברירת מחדל)
 }
 
 void Player::eliminateMe() { // eliminates the player from the game
@@ -146,21 +146,33 @@ bool Player::arrest(Player* target, Game& game) {
     return true;
 }
 
-void Player::sanction(Player* target) {
+bool Player::sanction(Player* target) {
+    // 1. בדיקות מקדימות שאינן תלויות במצב היעד
+    if (!target) {
+        throw std::runtime_error("Target player for sanction cannot be null.");
+    }
+    if (this == target) { // מניעת חרם עצמי
+        throw std::runtime_error("Cannot sanction yourself.");
+    }
     if (!target->isAlive()) {
-        throw std::runtime_error("Can't sanction non active player.");
+        throw std::runtime_error("Can't sanction a non-active player.");
+    }
+    if (coins < 3) { // בדיקת עלות
+        throw std::runtime_error(name + " doesn't have enough coins to sanction (needs 3).");
     }
 
-    if (coins < 3) {
-        throw std::runtime_error(name + " doesn't have enough coins to sanction.");
-    }
+    // 2. ניסיון להחיל את החרם על היעד.
+    //    onSanctionedBy אמורה לזרוק חריגה אם היעד כבר מוחרם או לא ניתן להחרים אותו מסיבה אחרת.
+    target->onSanctionedBy(*this); // קריאה זו תפעיל את הלוגיקה של היעד, כולל בדיקה אם הוא כבר מוחרם.
 
-    setCoins(-3);
-    target->sanctionMe();
-    target->onSanctionedBy(*this); // will be overridden by specific roles
+    // 3. אם onSanctionedBy לא זרקה חריגה, החרם נחשב כמוצלח.
+    //    רק עכשיו מפחיתים את המטבעות מהשחקן המבצע.
+    //    בהנחה ש-setCoins(int newCoins) היא פונקציה שקובעת את מספר המטבעות באופן מוחלט:
+    this->setCoins(this->getCoins() - 3);
+    return true; // החלת החרם הצליחה
 }
 
-void Player::coup(Player* target, Game& game) {
+bool Player::coup(Player* target, Game& game) {
     if (!target->isAlive()) {
         throw std::runtime_error("Cannot coup a non-active player.");
     }
@@ -177,6 +189,7 @@ void Player::coup(Player* target, Game& game) {
     game.recordCoup(this, target);
     std::cout << name << " performed coup on " << target->getName() 
               << " (can be blocked by General)" << std::endl;
+    return true;
 }
 //--------------------------------------------------------------------------------------------------------------------
 
@@ -193,12 +206,17 @@ bool Player::canPreventArrest() const {
     return false; // Default implementation, can be overridden by specific roles
 }
 void Player::onSanctionedBy(Player& by) {
-    if (is_sanctioned) {
+    // פונקציה זו נקראת על השחקן "היעד" של החרם.
+    // 'by' הוא השחקן שמבצע את החרם.
+
+    if (is_sanctioned) { // בדיקה אם היעד כבר מוחרם
         throw std::runtime_error(name + " is already sanctioned.");
     }
-    is_sanctioned = true; // Mark as sanctioned
 
-    // Default implementation, can be overridden by specific roles
+    // אם לא מוחרם, החל את החרם.
+    this->sanctionMe(); // קריאה ל-sanctionMe כדי להגדיר את מצב החרם באופן עקבי.
+                        // פונקציות שיורשות יכולות לדרוס את onSanctionedBy להוספת התנהגות ספציפית לתפקיד,
+                        // אך עדיין יכולות לקרוא ל-Player::onSanctionedBy(by) או ישירות ל-sanctionMe().
 }
 void Player::onArrestedBy(Player& attacker) {
     // Default implementation does nothing, can be overridden by specific roles

@@ -13,8 +13,8 @@
 #include "Judge.hpp"
 #include "Merchant.hpp"
 
-Game::Game() : currentTurn(0), gameEnded(false), rng(std::chrono::steady_clock::now().time_since_epoch().count()) {
-    // Constructor initializes turn index to 0 and game as not ended
+Game::Game() : currentTurn(0), gameEnded(false), _winnerName(""), rng(std::chrono::steady_clock::now().time_since_epoch().count()) {
+    // Constructor initializes turn index to 0, game as not ended, and winner name
     // Initialize random number generator with current time
 }
 
@@ -129,99 +129,92 @@ void Game::addPlayer(Player* player) {
 }
 
 void Game::nextTurn() {
+    clearBlockableActions();
+    clearLastArrestedFlag(); // Call this here to clear flags before next turn logic
+
+    // Check for game end BEFORE proceeding with the turn or currentTurn logic
+    size_t aliveCount = getAlivePlayerCount();
+    if (aliveCount <= 1) {
+        gameEnded = true;
+        if (aliveCount == 1) {
+            for (Player* p : _players) {
+                if (p->isAlive()) {
+                    _winnerName = p->getName();
+                    break;
+                }
+            }
+        } else { // aliveCount == 0, a draw or all eliminated
+            _winnerName = "No one (All eliminated)";
+        }
+        // No need to throw runtime_error here; GUI will handle game end
+        return; // Exit the function, game has ended
+    }
+    
+    // If game has already ended (e.g., from a previous check in main_gui), prevent further action
     if (gameEnded) {
-        throw std::runtime_error("Game has already ended");
+        return; 
     }
-    
-    if (_players.empty()) {
-        throw std::runtime_error("No players in game");
-    }
-    
-    // check if there are extra turns remaining to the current player
+
+    // if extra turns are remaining, the current player gets another turn
     if (extraTurnsRemaining > 0) {
         extraTurnsRemaining--;
-        std::cout << _players[currentTurn]->getName() 
-                  << " continues with extra turn! " 
-                  << extraTurnsRemaining << " extra turns remaining." << std::endl;
-
-        clearBlockableActions();
-        _players[currentTurn]->onBeginTurn();
+        // Stay on current player, and don't clear their is_my_turn flag
+        // The current player's onBeginTurn will be called again when main_gui checks it
+        _players[currentTurn]->onBeginTurn(); // Call onBeginTurn for the current player for their extra turn
         return;
     }
 
     // If no extra turns, continue normally
-    // אפס את התור של כולם (גם מתים)
-    for (Player* p : _players) {
-        p->setTurn(false);
+    // Set previous player's turn to false
+    // Ensure currentTurn is valid before accessing _players[currentTurn]
+    if (!_players.empty() && currentTurn < _players.size()) {
+        _players[currentTurn]->setTurn(false);
+    } else {
+        // This case should ideally not be hit if aliveCount <= 1 check is robust
+        // but as a safeguard or if game initialization failed.
+        gameEnded = true;
+        _winnerName = "Error: Game state invalid, no current player.";
+        return;
     }
 
-    // Reset arrest flags for all players except the one who was just arrested
-    if (_players[currentTurn]->isLastOneArrested()) {
-        for (size_t i = 0; i < _players.size(); ++i) {
-            if (i != currentTurn) {
-                // Reset the last arrested flag for all other players
-                _players[i]->gotArrested(false);
-            }
-        }
-    }
-    
-    // Find next alive player
-    size_t originalTurn = currentTurn;
+    // Find the next alive player
+    size_t originalCurrentTurn = currentTurn;
     do {
         currentTurn = (currentTurn + 1) % _players.size();
-        
-        // Prevent infinite loop if no players are alive
-        if (currentTurn == originalTurn) {
-            // Check if current player is alive, if not, game should end
-            if (!_players[currentTurn]->isAlive()) {
+        // Prevent infinite loop if no players are alive (already handled above but as a safeguard)
+        if (currentTurn == originalCurrentTurn) {
+            if (! _players[currentTurn]->isAlive()){ // if the only remaining player is also dead, then game ended
                 gameEnded = true;
-                throw std::runtime_error("No alive players remaining");
+                _winnerName = "Error: No alive players found after turn progression.";
+                return;
             }
-            break;
+            break; // Found the original player, meaning they are the only one left or an issue
         }
     } while (!_players[currentTurn]->isAlive());
     
     // Set new current player's turn to true
     _players[currentTurn]->setTurn(true);
-    
-    // Check if only one player remains alive
-    int aliveCount = 0;
-    for (Player* player : _players) {
-        if (player->isAlive()) {
-            aliveCount++;
-        }
-    }
-    
-    if (aliveCount <= 1) {
-        gameEnded = true;
-        if (aliveCount == 1) {
-            std::cout << "Game ended! Winner: " << winner() << std::endl;
-        } else {
-            std::cout << "Game ended in a draw - no players remaining!" << std::endl;
-        }
-    }
-    
-    // Clear blockable actions when switching to new player
-    clearBlockableActions();
+    _players[currentTurn]->onBeginTurn(); // Call onBeginTurn for the new current player
 
     // Check if current player has 10+ coins and must coup
     if (_players[currentTurn]->getCoins() >= 10) {
         std::cout << _players[currentTurn]->getName() 
-                  << " has " << _players[currentTurn]->getCoins() 
-                  << " coins and must perform a coup!" << std::endl;
+                    << " has " << _players[currentTurn]->getCoins() 
+                    << " coins and must perform a coup!" << std::endl;
     }
 }
 
+
 std::string Game::turn() const {
+    // If the game has ended, don't throw an error, main_gui will check isGameEnded()
     if (gameEnded) {
-        throw std::runtime_error("Game has ended, no current turn");
+        return "Game Over"; // Or some other indication that there's no active turn
     }
     
     if (_players.empty()) {
         throw std::runtime_error("No players in game");
     }
     
-    //std::cout << "Current turn: " << currentTurn << std::endl;
     return _players[currentTurn]->getName();
 }
 
@@ -239,29 +232,11 @@ std::vector<std::string> Game::players() const {
 
 std::string Game::winner() const {
     if (!gameEnded) {
-        throw std::runtime_error("Game is still active, no winner yet");
+        // Only return winner if game has officially ended
+        return ""; // Or throw a specific error indicating game is not over
     }
-    
-    // Find the single alive player
-    Player* winner = nullptr;
-    int aliveCount = 0;
-    
-    for (Player* player : _players) {
-        if (player->isAlive()) {
-            winner = player;
-            aliveCount++;
-        }
-    }
-    
-    if (aliveCount == 0) {
-        throw std::runtime_error("No players alive - game ended in a draw");
-    }
-    
-    if (aliveCount > 1) {
-        throw std::runtime_error("Game marked as ended but there are more than 1 players still alive");
-    }
-    
-    return winner->getName();
+    // If game has ended, _winnerName should have been set by nextTurn()
+    return _winnerName;
 }
 
 void Game::recordBribe(Player* player) {
@@ -292,7 +267,7 @@ bool Game::tryBlockBribe(Player* blocker) {
     }
     
     // Undo the bribe
-    lastActionPlayer->setCoins(4); // Return the 4 coins
+    lastActionPlayer->setCoins(lastActionPlayer->getCoins() + 4); // Return the 4 coins
     // cancel the extra turns
     extraTurnsRemaining = 0;
     std::cout << blocker->getName() << " blocked " << lastActionPlayer->getName() 
@@ -308,7 +283,7 @@ bool Game::tryBlockTax(Player* blocker) {
     }
     
     // Undo the tax
-    lastActionPlayer->setCoins(-2); // Remove the gained coins
+    lastActionPlayer->setCoins(lastActionPlayer->getCoins() - 2); // Remove the gained coins
     std::cout << blocker->getName() << " blocked " << lastActionPlayer->getName() 
               << "'s tax!" << std::endl;
     
@@ -325,7 +300,7 @@ bool Game::tryBlockCoup(Player* blocker) {
     if (coupTarget != nullptr) {
         coupTarget->restoreFromElimination();
     }
-    lastActionPlayer->setCoins(7); // Return the 7 coins
+    lastActionPlayer->setCoins(lastActionPlayer->getCoins() + 7); // Return the 7 coins
     // Need to restore target player - need to store target reference
     std::cout << blocker->getName() << " blocked " << lastActionPlayer->getName() 
               << "'s coup!" << std::endl;
@@ -336,6 +311,7 @@ bool Game::tryBlockCoup(Player* blocker) {
 
 void Game::clearBlockableActions() {
     lastActionPlayer = nullptr;
+    coupTarget = nullptr; // Also clear coup target
     canBlockBribe = false;
     canBlockTax = false;
     canBlockCoup = false;
@@ -361,73 +337,9 @@ Player* Game::getCurrentPlayer() const {
     if (_players.empty() || gameEnded) {
         return nullptr;
     }
+    // Ensure currentTurn is a valid index before accessing _players
+    if (currentTurn >= _players.size()) {
+        return nullptr; // Should not happen if logic is sound, but as a safeguard
+    }
     return _players[currentTurn];
 }
-
-// דוגמת שימוש במשחק:
-/*
-// יצירת משחק חדש
-Game game;
-
-// קבלת שמות שחקנים מהממשק הגרפי
-std::vector<std::string> playerNames = {"Alice", "Bob", "Charlie", "Diana"};
-
-// איתחול המשחק
-try {
-    game.initializeGame(playerNames);
-    
-    // המשחק מוכן להתחיל
-    std::cout << "Current turn: " << game.turn() << std::endl;
-    
-    // הצגת מידע על השחקנים
-    auto playersInfo = game.getPlayersWithRoles();
-    for (const auto& info : playersInfo) {
-        std::cout << info.first << " (" << info.second << ")" << std::endl;
-    }
-    
-    // דוגמה לפלט אפשרי:
-    // Player Alice assigned role: Judge
-    // Player Bob assigned role: Governor  
-    // Player Charlie assigned role: Judge
-    // Player Diana assigned role: Merchant
-    
-} catch (const std::exception& e) {
-    std::cerr << "Error: " << e.what() << std::endl;
-}
-
-// דוגמה 1: שוחד
-player->bribe(game); // מיידי: -4 מטבעות + רישום לחסימה
-
-// בכל זמן עד התור הבא, שופט יכול לחסום:
-if (judge->canUndoBribe()) {
-    bool blocked = game.tryBlockBribe(judge);
-    if (blocked) {
-        std::cout << "Bribe was blocked! 4 coins returned." << std::endl;
-    }
-}
-
-// דוגמה 2: מס
-player->tax(game); // מיידי: +2 מטבעות + רישום לחסימה
-
-// מושל יכול לחסום:
-if (governor->canBlockTax()) {
-    bool blocked = game.tryBlockTax(governor);
-    if (blocked) {
-        std::cout << "Tax was blocked! 2 coins removed." << std::endl;
-    }
-}
-
-// דוגמה 3: הפיכה
-player->coup(target, game); // מיידי: -7 מטבעות, מטרה מחוסלת + רישום לחסימה
-
-// גנרל יכול לחסום:
-if (general->canBlockCoup()) {
-    bool blocked = game.tryBlockCoup(general);
-    if (blocked) {
-        std::cout << "Coup was blocked! Target restored, 7 coins returned." << std::endl;
-    }
-}
-
-// כשמתחיל התור הבא:
-game.nextTurn(); // מנקה את כל האפשרויות לחסימה אוטומטית
-*/

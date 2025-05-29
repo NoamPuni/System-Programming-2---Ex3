@@ -3,10 +3,13 @@
 #include <vector>
 #include <string>
 #include <sstream>
-#include <deque> // Added for game log
+#include <deque>
 #include "Game.hpp"
+#include "Player.hpp" // ודא שזה כלול עבור Player*
+#include "Baron.hpp" // Include Baron.hpp for Baron specific methods
+#include "Spy.hpp"   // Include Spy.hpp for Spy specific methods
 
-// Helper function to create text elements (remains unchanged)
+// Helper function to create text elements
 sf::Text createText(const std::string& content, const sf::Font& font, unsigned int size, float x, float y) {
     sf::Text text;
     text.setFont(font);
@@ -17,14 +20,14 @@ sf::Text createText(const std::string& content, const sf::Font& font, unsigned i
     return text;
 }
 
-// NEW: Game Log variables
+// Game Log variables
 std::deque<std::string> gameLog;
-const unsigned int MAX_LOG_MESSAGES = 15; // Display up to 15 messages
-const float LOG_PANEL_X = 580.f;    // X position for the log panel (adjusted for 800px width)
-const float LOG_ENTRY_HEIGHT = 18.f; // Height per log entry (font size 14 + padding)
+const unsigned int MAX_LOG_MESSAGES = 15;
+const float LOG_PANEL_X = 600.f; // Adjusted for new button layout
+const float LOG_ENTRY_HEIGHT = 18.f;
 const unsigned int LOG_FONT_SIZE = 14;
 
-// NEW: Error Popup variables
+// Error Popup variables
 sf::Text errorPopupTextElement;
 sf::RectangleShape errorPopupBackground;
 bool displayErrorPopup = false;
@@ -43,78 +46,129 @@ void addGameLogEntry(const std::string& message) {
 void triggerErrorPopup(const std::string& message, const sf::Font& font) {
     currentErrorPopupMessage = message;
     displayErrorPopup = true;
-    // Text and background properties will be set in the drawing phase
-    // to correctly calculate size based on message length.
 }
 
 
 int main() {
     sf::Font font;
     if (!font.loadFromFile("arial.ttf")) {
-        // This error is critical and happens before GUI is fully usable for popups,
-        // so it remains on std::cerr.
         std::cerr << "Failed to load font!" << std::endl;
         return 1;
     }
 
     Game game;
     sf::RenderWindow window(sf::VideoMode(800, 600), "Coup Game - GUI");
-    window.setFramerateLimit(60); // Optional: for smoother experience
+    window.setFramerateLimit(60);
 
     // Game states
-    enum GameState { ENTERING_PLAYERS, PLAYING, SELECTING_ARREST_TARGET };
+    enum GameState { ENTERING_PLAYERS, PLAYING, SELECTING_ARREST_TARGET, SELECTING_SANCTION_TARGET, SELECTING_COUP_TARGET, SELECTING_SPY_TARGET, GAME_OVER }; // Added SELECTING_SPY_TARGET
     GameState currentState = ENTERING_PLAYERS;
 
-    // Player entry variables
     std::vector<std::string> enteredPlayers;
     std::string currentPlayerName = "";
     bool gameInitialized = false;
 
-    // Target selection variables
     std::vector<sf::RectangleShape> targetButtons;
     std::vector<sf::Text> targetTexts;
+    
+    // Action buttons - Re-layout for 6 buttons (including Coup)
+    float buttonWidth = 90.f; // Adjusted for 6 buttons
+    float buttonHeight = 35.f; // Adjusted for 6 buttons
+    float buttonYPos = 500.f;
+    float buttonSpacing = 8.f; // Further reduced spacing
+    float currentButtonX = 10.f; // Start closer to the left edge
 
-    // Action buttons (for playing state)
-    sf::RectangleShape gatherButton(sf::Vector2f(120, 40));
+    // Standard Actions
+    sf::RectangleShape gatherButton(sf::Vector2f(buttonWidth, buttonHeight));
     gatherButton.setFillColor(sf::Color::Blue);
-    gatherButton.setPosition(50, 500);
+    gatherButton.setPosition(currentButtonX, buttonYPos);
+    sf::Text gatherText = createText("Gather", font, 15, 0, 0);
 
-    sf::RectangleShape taxButton(sf::Vector2f(120, 40));
+    currentButtonX += buttonWidth + buttonSpacing;
+    sf::RectangleShape taxButton(sf::Vector2f(buttonWidth, buttonHeight));
     taxButton.setFillColor(sf::Color::Green);
-    taxButton.setPosition(200, 500);
+    taxButton.setPosition(currentButtonX, buttonYPos);
+    sf::Text taxText = createText("Tax", font, 15, 0, 0);
 
-    sf::RectangleShape bribeButton(sf::Vector2f(120, 40));
+    currentButtonX += buttonWidth + buttonSpacing;
+    sf::RectangleShape bribeButton(sf::Vector2f(buttonWidth, buttonHeight));
     bribeButton.setFillColor(sf::Color::Magenta);
-    bribeButton.setPosition(350, 500);
+    bribeButton.setPosition(currentButtonX, buttonYPos);
+    sf::Text bribeText = createText("Bribe (-4)", font, 13, 0, 0);
 
-    sf::RectangleShape arrestButton(sf::Vector2f(120, 40));
+    currentButtonX += buttonWidth + buttonSpacing;
+    sf::RectangleShape arrestButton(sf::Vector2f(buttonWidth, buttonHeight));
     arrestButton.setFillColor(sf::Color::Red);
-    arrestButton.setPosition(500, 500); // Ends at x = 620
+    arrestButton.setPosition(currentButtonX, buttonYPos);
+    sf::Text arrestText = createText("Arrest", font, 15, 0, 0);
+
+    currentButtonX += buttonWidth + buttonSpacing;
+    sf::RectangleShape sanctionButton(sf::Vector2f(buttonWidth, buttonHeight));
+    sanctionButton.setFillColor(sf::Color(255, 165, 0)); // Orange color for Sanction
+    sanctionButton.setPosition(currentButtonX, buttonYPos);
+    sf::Text sanctionText = createText("Sanction(-3)", font, 12, 0, 0);
+
+    currentButtonX += buttonWidth + buttonSpacing;
+    sf::RectangleShape coupButton(sf::Vector2f(buttonWidth, buttonHeight));
+    coupButton.setFillColor(sf::Color(100, 0, 100)); // Dark Purple for Coup
+    coupButton.setPosition(currentButtonX, buttonYPos);
+    sf::Text coupText = createText("Coup(-7)", font, 13, 0, 0);
+
+    // Special Action Buttons
+    // Baron: Invest
+    sf::RectangleShape investButton(sf::Vector2f(buttonWidth, buttonHeight));
+    investButton.setFillColor(sf::Color(0, 150, 150)); // Teal color
+    investButton.setPosition(currentButtonX, buttonYPos - 45); // Above standard buttons
+    sf::Text investText = createText("Invest (+6)", font, 13, 0, 0);
+
+    // Spy: Spy Action (no cost, no turn)
+    sf::RectangleShape spyActionButton(sf::Vector2f(buttonWidth, buttonHeight));
+    spyActionButton.setFillColor(sf::Color(50, 50, 150)); // Dark Blue
+    spyActionButton.setPosition(currentButtonX - buttonWidth - buttonSpacing, buttonYPos - 45); // Above standard buttons
+    sf::Text spyActionText = createText("Spy Action", font, 13, 0, 0);
+
 
     // Player entry buttons
     sf::RectangleShape enterPlayerButton(sf::Vector2f(150, 40));
     enterPlayerButton.setFillColor(sf::Color::Cyan);
     enterPlayerButton.setPosition(50, 400);
+    sf::Text enterPlayerText = createText("Enter Player", font, 18, 75, 410);
 
     sf::RectangleShape startGameButton(sf::Vector2f(150, 40));
     startGameButton.setFillColor(sf::Color::Yellow);
     startGameButton.setPosition(250, 400);
-
-    sf::Text gatherText = createText("Gather", font, 18, 65, 510);
-    sf::Text taxText = createText("Tax", font, 18, 235, 510);
-    sf::Text bribeText = createText("Bribe (-4)", font, 16, 360, 510);
-    sf::Text arrestText = createText("Arrest", font, 18, 525, 510); // Text for arrest button
-    sf::Text enterPlayerText = createText("Enter Player", font, 18, 75, 410);
     sf::Text startGameText = createText("Start Game", font, 18, 285, 410);
+    
+    // Exit Game button
+    sf::RectangleShape exitGameButton(sf::Vector2f(150, 50));
+    exitGameButton.setFillColor(sf::Color(150, 50, 50)); // Dark red
+    exitGameButton.setPosition(window.getSize().x / 2.f - exitGameButton.getSize().x / 2.f, 400);
+    sf::Text exitGameText = createText("Exit Game", font, 20, 0, 0);
+
+    // Center texts on buttons helper
+    auto centerTextOnButton = [](sf::Text& text, const sf::RectangleShape& button) {
+        sf::FloatRect textRect = text.getLocalBounds();
+        text.setOrigin(textRect.left + textRect.width / 2.0f, textRect.top + textRect.height / 2.0f);
+        text.setPosition(button.getPosition().x + button.getSize().x / 2.0f, button.getPosition().y + button.getSize().y / 2.0f -2);
+    };
+
+    centerTextOnButton(gatherText, gatherButton);
+    centerTextOnButton(taxText, taxButton);
+    centerTextOnButton(bribeText, bribeButton);
+    centerTextOnButton(arrestText, arrestButton);
+    centerTextOnButton(sanctionText, sanctionButton);
+    centerTextOnButton(coupText, coupButton);
+    centerTextOnButton(investText, investButton); // Center Invest button text
+    centerTextOnButton(spyActionText, spyActionButton); // Center Spy Action button text
+    centerTextOnButton(exitGameText, exitGameButton);
 
     bool actionPerformedThisClick = false;
 
-    // Configure Error Popup Background Style
-    errorPopupBackground.setFillColor(sf::Color(70, 70, 70, 230)); // Dark semi-transparent
+    errorPopupBackground.setFillColor(sf::Color(70, 70, 70, 230));
     errorPopupBackground.setOutlineColor(sf::Color::Red);
     errorPopupBackground.setOutlineThickness(2.f);
 
-    addGameLogEntry("Welcome to Coup! Enter player names to begin.");
+    addGameLogEntry("Welcome to Coup! Enter player names.");
 
     while (window.isOpen()) {
         sf::Event event;
@@ -122,33 +176,44 @@ int main() {
             if (event.type == sf::Event::Closed)
                 window.close();
 
-            // Handle input for dismissing error popup first
             if (displayErrorPopup) {
                 if (event.type == sf::Event::MouseButtonPressed) {
                     displayErrorPopup = false;
-                    actionPerformedThisClick = true; // Consume this click
+                    actionPerformedThisClick = true; 
                 }
                 if (event.type == sf::Event::KeyPressed && event.key.code == sf::Keyboard::Escape) {
                     displayErrorPopup = false;
-                    actionPerformedThisClick = true; // Consume this key press
+                    actionPerformedThisClick = true; 
                 }
-                // If popup was dismissed, skip other event handling for this specific event trigger
-                if (actionPerformedThisClick && 
-                    (event.type == sf::Event::MouseButtonPressed || event.type == sf::Event::KeyPressed)) {
-                    // Reset actionPerformedThisClick for the *next* event if it was a release
+                if (actionPerformedThisClick && (event.type == sf::Event::MouseButtonPressed || event.type == sf::Event::KeyPressed)) {
                     if(event.type == sf::Event::MouseButtonReleased) actionPerformedThisClick = false;
                     continue; 
                 }
             }
 
+            if (game.isGameEnded()) {
+                if (currentState != GAME_OVER) {
+                    currentState = GAME_OVER;
+                    addGameLogEntry("Game Over! Winner: " + game.winner());
+                }
+                if (event.type == sf::Event::MouseButtonPressed && !actionPerformedThisClick) {
+                    sf::Vector2f mousePos(event.mouseButton.x, event.mouseButton.y);
+                    if (exitGameButton.getGlobalBounds().contains(mousePos)) {
+                        window.close();
+                    }
+                    actionPerformedThisClick = true;
+                }
+                if (event.type == sf::Event::MouseButtonReleased) {
+                    actionPerformedThisClick = false;
+                }
+                continue;
+            }
 
             if (currentState == ENTERING_PLAYERS) {
-                if (event.type == sf::Event::TextEntered) {
+                 if (event.type == sf::Event::TextEntered) {
                     if (event.text.unicode < 128) {
-                        if (event.text.unicode == '\b') { // Backspace
-                            if (!currentPlayerName.empty()) {
-                                currentPlayerName.pop_back();
-                            }
+                        if (event.text.unicode == '\b') { 
+                            if (!currentPlayerName.empty()) { currentPlayerName.pop_back(); }
                         } else if (event.text.unicode == '\r' || event.text.unicode == '\n') {
                             if (!currentPlayerName.empty() && enteredPlayers.size() < 6) {
                                 enteredPlayers.push_back(currentPlayerName);
@@ -160,37 +225,28 @@ int main() {
                         }
                     }
                 }
-
                 if (event.type == sf::Event::MouseButtonPressed && !actionPerformedThisClick) {
                     sf::Vector2f mousePos(event.mouseButton.x, event.mouseButton.y);
-
                     if (enterPlayerButton.getGlobalBounds().contains(mousePos)) {
                         if (!currentPlayerName.empty() && enteredPlayers.size() < 6) {
                             enteredPlayers.push_back(currentPlayerName);
                             addGameLogEntry("Player added: " + currentPlayerName);
                             currentPlayerName = "";
-                            actionPerformedThisClick = true;
-                        } else if (currentPlayerName.empty()) {
-                             addGameLogEntry("Cannot add empty player name.");
-                        } else {
-                             addGameLogEntry("Maximum players (6) reached.");
-                        }
-                    }
-                    else if (startGameButton.getGlobalBounds().contains(mousePos)) {
+                        } else if (currentPlayerName.empty()) { addGameLogEntry("Cannot add empty name.");}
+                        else { addGameLogEntry("Max players (6) reached.");}
+                        actionPerformedThisClick = true;
+                    } else if (startGameButton.getGlobalBounds().contains(mousePos)) {
                         if (enteredPlayers.size() >= 2) {
                             try {
                                 game.initializeGame(enteredPlayers);
                                 gameInitialized = true;
                                 currentState = PLAYING;
                                 addGameLogEntry("Game started with " + std::to_string(enteredPlayers.size()) + " players!");
-                                actionPerformedThisClick = true;
                             } catch (const std::exception& e) {
-                                triggerErrorPopup("Failed to initialize game: " + std::string(e.what()), font);
-                                actionPerformedThisClick = true;
+                                triggerErrorPopup("Init game error: " + std::string(e.what()), font);
                             }
-                        } else {
-                            addGameLogEntry("Need at least 2 players to start.");
-                        }
+                        } else { addGameLogEntry("Need 2-6 players."); }
+                        actionPerformedThisClick = true;
                     }
                 }
             }
@@ -199,8 +255,9 @@ int main() {
                     sf::Vector2f mousePos(event.mouseButton.x, event.mouseButton.y);
                     Player* currentPlayer = game.getCurrentPlayer();
 
-                    if (currentPlayer != nullptr) {
+                    if (currentPlayer != nullptr && currentPlayer->isAlive()) {
                         try {
+                            // Standard Actions
                             if (gatherButton.getGlobalBounds().contains(mousePos)) {
                                 currentPlayer->gather();
                                 addGameLogEntry(currentPlayer->getName() + " gathered 1 coin.");
@@ -215,39 +272,139 @@ int main() {
                             }
                             else if (bribeButton.getGlobalBounds().contains(mousePos)) {
                                 currentPlayer->bribe(game);
-                                addGameLogEntry(currentPlayer->getName() + " performed bribe."); // Specifics in Player.cpp logic
-                                game.nextTurn();
+                                addGameLogEntry(currentPlayer->getName() + " performed bribe.");
+                                game.nextTurn(); 
                                 actionPerformedThisClick = true;
                             }
                             else if (arrestButton.getGlobalBounds().contains(mousePos)) {
-                                currentState = SELECTING_ARREST_TARGET;
-                                targetButtons.clear();
-                                targetTexts.clear();
-                                auto playersInfo = game.getPlayersWithRoles();
-                                float yPos = 200;
-                                for (const auto& playerInfo : playersInfo) {
-                                    if (playerInfo.first != currentPlayer->getName()) {
-                                        sf::RectangleShape targetButton(sf::Vector2f(200, 40));
-                                        targetButton.setFillColor(sf::Color::Yellow);
-                                        targetButton.setPosition(window.getSize().x / 2.f - targetButton.getSize().x / 2.f, yPos);
-                                        targetButtons.push_back(targetButton);
-                                        sf::Text targetText = createText(playerInfo.first, font, 18, targetButton.getPosition().x + 20, yPos + 10);
-                                        targetTexts.push_back(targetText);
+                                if (!currentPlayer->isPreventedFromArresting()) { // Check if prevented
+                                    addGameLogEntry(currentPlayer->getName() + " chooses Arrest target...");
+                                    currentState = SELECTING_ARREST_TARGET;
+                                    targetButtons.clear(); targetTexts.clear();
+                                    auto allPlayers = game.getAllPlayers(); // Assuming getAllPlayers exists and returns Player*
+                                    float yPos = 150;
+                                    for (Player* p : allPlayers) {
+                                        if (p->isAlive() && p != currentPlayer) {
+                                            sf::RectangleShape targetBtn(sf::Vector2f(200, 40));
+                                            targetBtn.setFillColor(sf::Color::Yellow);
+                                            targetBtn.setPosition(window.getSize().x / 2.f - targetBtn.getSize().x / 2.f, yPos);
+                                            targetButtons.push_back(targetBtn);
+                                            sf::Text targetTxt = createText(p->getName(), font, 18, 0, 0);
+                                            centerTextOnButton(targetTxt, targetBtn);
+                                            targetTexts.push_back(targetTxt);
+                                            yPos += 50;
+                                        }
+                                    }
+                                    if (targetButtons.empty()) {
+                                        addGameLogEntry("No valid targets for Arrest.");
+                                        currentState = PLAYING;
+                                    }
+                                } else {
+                                    triggerErrorPopup("You are prevented from using Arrest this turn!", font);
+                                }
+                                actionPerformedThisClick = true;
+                            }
+                            else if (sanctionButton.getGlobalBounds().contains(mousePos)) {
+                                if (currentPlayer->getCoins() >= 3) {
+                                    addGameLogEntry(currentPlayer->getName() + " chooses Sanction target...");
+                                    currentState = SELECTING_SANCTION_TARGET;
+                                    targetButtons.clear(); targetTexts.clear();
+                                    auto allPlayers = game.getAllPlayers();
+                                    float yPos = 150;
+                                    for (Player* p : allPlayers) {
+                                        if (p->isAlive() && p != currentPlayer) {
+                                            sf::RectangleShape targetBtn(sf::Vector2f(200, 40));
+                                            targetBtn.setFillColor(sf::Color(255,165,0));
+                                            targetBtn.setPosition(window.getSize().x / 2.f - targetBtn.getSize().x / 2.f, yPos);
+                                            targetButtons.push_back(targetBtn);
+                                            sf::Text targetTxt = createText(p->getName(), font, 18, 0, 0);
+                                            centerTextOnButton(targetTxt, targetBtn);
+                                            targetTexts.push_back(targetTxt);
+                                            yPos += 50;
+                                        }
+                                    }
+                                    if (targetButtons.empty()) {
+                                        addGameLogEntry("No valid targets for Sanction.");
+                                        currentState = PLAYING;
+                                    }
+                                } else {
+                                    triggerErrorPopup("Not enough coins for Sanction (need 3).", font);
+                                }
+                                actionPerformedThisClick = true;
+                            }
+                            else if (coupButton.getGlobalBounds().contains(mousePos)) {
+                                if (currentPlayer->getCoins() >= 7) {
+                                    addGameLogEntry(currentPlayer->getName() + " chooses Coup target...");
+                                    currentState = SELECTING_COUP_TARGET;
+                                    targetButtons.clear(); targetTexts.clear();
+                                    auto allPlayers = game.getAllPlayers();
+                                    float yPos = 150;
+                                    for (Player* p : allPlayers) {
+                                        if (p->isAlive() && p != currentPlayer) {
+                                            sf::RectangleShape targetBtn(sf::Vector2f(200, 40));
+                                            targetBtn.setFillColor(sf::Color(100, 0, 100)); // Dark Purple
+                                            targetBtn.setPosition(window.getSize().x / 2.f - targetBtn.getSize().x / 2.f, yPos);
+                                            targetButtons.push_back(targetBtn);
+                                            sf::Text targetTxt = createText(p->getName(), font, 18, 0, 0);
+                                            centerTextOnButton(targetTxt, targetBtn);
+                                            targetTexts.push_back(targetTxt);
+                                            yPos += 50;
+                                        }
+                                    }
+                                    if (targetButtons.empty()) {
+                                        addGameLogEntry("No valid targets for Coup.");
+                                        currentState = PLAYING;
+                                    }
+                                } else {
+                                    triggerErrorPopup("Not enough coins for Coup (need 7).", font);
+                                }
+                                actionPerformedThisClick = true;
+                            }
+                            // Special Actions (Spy, Baron)
+                            else if (currentPlayer->role() == "Baron" && investButton.getGlobalBounds().contains(mousePos)) {
+                                // Correctly cast to Baron* to call invest()
+                                Baron* baronPlayer = dynamic_cast<Baron*>(currentPlayer);
+                                if (baronPlayer) {
+                                    baronPlayer->invest();
+                                    addGameLogEntry(currentPlayer->getName() + " (Baron) invested and gained 6 coins.");
+                                    // Baron's invest is not a turn-ending action
+                                } else {
+                                    triggerErrorPopup("Internal Error: Player is not a Baron despite role() returning Baron.", font);
+                                }
+                                actionPerformedThisClick = true;
+                            }
+                            else if (currentPlayer->role() == "Spy" && spyActionButton.getGlobalBounds().contains(mousePos)) {
+                                addGameLogEntry(currentPlayer->getName() + " (Spy) chooses Spy Action target...");
+                                currentState = SELECTING_SPY_TARGET;
+                                targetButtons.clear(); targetTexts.clear();
+                                auto allPlayers = game.getAllPlayers();
+                                float yPos = 150;
+                                for (Player* p : allPlayers) {
+                                    if (p->isAlive() && p != currentPlayer) {
+                                        sf::RectangleShape targetBtn(sf::Vector2f(200, 40));
+                                        targetBtn.setFillColor(sf::Color(50, 50, 150));
+                                        targetBtn.setPosition(window.getSize().x / 2.f - targetBtn.getSize().x / 2.f, yPos);
+                                        targetButtons.push_back(targetBtn);
+                                        sf::Text targetTxt = createText(p->getName(), font, 18, 0, 0);
+                                        centerTextOnButton(targetTxt, targetBtn);
+                                        targetTexts.push_back(targetTxt);
                                         yPos += 50;
                                     }
                                 }
                                 if (targetButtons.empty()) {
-                                    addGameLogEntry("No other players available for arrest!");
+                                    addGameLogEntry("No valid targets for Spy Action.");
                                     currentState = PLAYING;
-                                } else {
-                                    addGameLogEntry(currentPlayer->getName() + " is selecting arrest target...");
                                 }
                                 actionPerformedThisClick = true;
                             }
+
                         } catch (const std::exception& e) {
                             triggerErrorPopup("Action Error: " + std::string(e.what()), font);
                             actionPerformedThisClick = true;
                         }
+                    } else if (currentPlayer && !currentPlayer->isAlive()) {
+                         addGameLogEntry("Eliminated players cannot act.");
+                         actionPerformedThisClick = true;
                     }
                 }
             }
@@ -255,66 +412,156 @@ int main() {
                 if (event.type == sf::Event::MouseButtonPressed && !actionPerformedThisClick) {
                     sf::Vector2f mousePos(event.mouseButton.x, event.mouseButton.y);
                     Player* currentPlayer = game.getCurrentPlayer();
-
                     if (currentPlayer != nullptr) {
-                        bool targetClicked = false;
                         for (size_t i = 0; i < targetButtons.size(); ++i) {
                             if (targetButtons[i].getGlobalBounds().contains(mousePos)) {
                                 std::string targetName = targetTexts[i].getString();
-                                targetClicked = true;
                                 try {
                                     Player* targetPlayer = nullptr;
-                                    auto allPlayers = game.getAllPlayers(); //
-                                    for (Player* player : allPlayers) {
-                                        if (player->getName() == targetName) {
-                                            targetPlayer = player;
-                                            break;
-                                        }
-                                    }
-                                    if (targetPlayer != nullptr) {
-                                        bool arrestSuccessful = currentPlayer->arrest(targetPlayer, game); //
+                                    for (Player* p : game.getAllPlayers()) { if (p->getName() == targetName) { targetPlayer = p; break; } }
+                                    
+                                    if (targetPlayer != nullptr && targetPlayer->isAlive()) {
+                                        bool arrestSuccessful = currentPlayer->arrest(targetPlayer, game);
                                         if (arrestSuccessful) {
                                             addGameLogEntry(currentPlayer->getName() + " arrested " + targetName + "!");
-                                            game.nextTurn();
+                                            game.nextTurn(); 
                                         } else {
-                                            // The Player::arrest method should throw an exception or return detailed error
-                                            // For now, using a generic message that might be improved with more info from game logic
-                                            triggerErrorPopup("Arrest failed. Target: " + targetName + ". (May be invalid or protected)", font);
+                                            triggerErrorPopup("Arrest on " + targetName + " failed (e.g., recently arrested or prevented).", font);
                                         }
-                                    } else {
-                                        triggerErrorPopup("Target player " + targetName + " not found.", font);
-                                    }
+                                    } else { triggerErrorPopup("Target " + targetName + " is invalid or not found.", font); }
+                                } catch (const std::exception& e) { triggerErrorPopup("Arrest Error: " + std::string(e.what()), font); }
+                                currentState = PLAYING;
+                                actionPerformedThisClick = true;
+                                break;
+                            }
+                        }
+                    }
+                }
+                if (event.type == sf::Event::KeyPressed && event.key.code == sf::Keyboard::Escape) {
+                    currentState = PLAYING; addGameLogEntry("Arrest action cancelled."); actionPerformedThisClick = true;
+                }
+            }
+            else if (currentState == SELECTING_SANCTION_TARGET) {
+                if (event.type == sf::Event::MouseButtonPressed && !actionPerformedThisClick) {
+                    sf::Vector2f mousePos(event.mouseButton.x, event.mouseButton.y);
+                    Player* currentPlayer = game.getCurrentPlayer();
+                    if (currentPlayer != nullptr) {
+                        for (size_t i = 0; i < targetButtons.size(); ++i) {
+                            if (targetButtons[i].getGlobalBounds().contains(mousePos)) {
+                                std::string targetName = targetTexts[i].getString();
+                                try {
+                                    Player* targetPlayer = nullptr;
+                                    for (Player* p : game.getAllPlayers()) { if (p->getName() == targetName) { targetPlayer = p; break; } }
+
+                                    if (targetPlayer != nullptr && targetPlayer->isAlive()) {
+                                        currentPlayer->sanction(targetPlayer);
+                                        addGameLogEntry(currentPlayer->getName() + " sanctioned " + targetName + ".");
+                                        game.nextTurn();
+                                    } else { triggerErrorPopup("Target " + targetName + " is invalid or not found.", font); }
                                 } catch (const std::exception& e) {
-                                    triggerErrorPopup("Arrest Error: " + std::string(e.what()), font);
+                                    triggerErrorPopup("Sanction Error: " + std::string(e.what()), font);
                                 }
                                 currentState = PLAYING;
                                 actionPerformedThisClick = true;
-                                break; 
+                                break;
                             }
                         }
-                         if (!targetClicked) { // Click was not on a target button
-                            // Potentially add a way to cancel by clicking outside buttons, or rely on ESC
-                        }
-                    }
-                }
-                
-                if (event.type == sf::Event::KeyPressed) {
-                    if (event.key.code == sf::Keyboard::Escape) {
+                    } else if (currentPlayer && currentPlayer->getCoins() < 3) {
+                        triggerErrorPopup("Not enough coins for Sanction (need 3).", font);
                         currentState = PLAYING;
-                        addGameLogEntry("Arrest action cancelled.");
                         actionPerformedThisClick = true;
                     }
                 }
+                if (event.type == sf::Event::KeyPressed && event.key.code == sf::Keyboard::Escape) {
+                    currentState = PLAYING; addGameLogEntry("Sanction action cancelled."); actionPerformedThisClick = true;
+                }
             }
+            else if (currentState == SELECTING_COUP_TARGET) {
+                if (event.type == sf::Event::MouseButtonPressed && !actionPerformedThisClick) {
+                    sf::Vector2f mousePos(event.mouseButton.x, event.mouseButton.y);
+                    Player* currentPlayer = game.getCurrentPlayer();
+                    if (currentPlayer != nullptr) {
+                        for (size_t i = 0; i < targetButtons.size(); ++i) {
+                            if (targetButtons[i].getGlobalBounds().contains(mousePos)) {
+                                std::string targetName = targetTexts[i].getString();
+                                try {
+                                    Player* targetPlayer = nullptr;
+                                    for (Player* p : game.getAllPlayers()) { if (p->getName() == targetName) { targetPlayer = p; break; } }
+
+                                    if (targetPlayer != nullptr && targetPlayer->isAlive()) {
+                                        currentPlayer->coup(targetPlayer, game); 
+                                        addGameLogEntry(currentPlayer->getName() + " performed Coup on " + targetName + "!");
+                                        game.nextTurn();
+                                    } else { triggerErrorPopup("Target " + targetName + " is invalid or not found.", font); }
+                                } catch (const std::exception& e) {
+                                    triggerErrorPopup("Coup Error: " + std::string(e.what()), font);
+                                }
+                                currentState = PLAYING;
+                                actionPerformedThisClick = true;
+                                break;
+                            }
+                        }
+                    } else if (currentPlayer && currentPlayer->getCoins() < 7) {
+                        triggerErrorPopup("Not enough coins for Coup (need 7).", font);
+                        currentState = PLAYING;
+                        actionPerformedThisClick = true;
+                    }
+                }
+                if (event.type == sf::Event::KeyPressed && event.key.code == sf::Keyboard::Escape) {
+                    currentState = PLAYING; addGameLogEntry("Coup action cancelled."); actionPerformedThisClick = true;
+                }
+            }
+            // New state for Spy Action target selection
+            else if (currentState == SELECTING_SPY_TARGET) {
+                if (event.type == sf::Event::MouseButtonPressed && !actionPerformedThisClick) {
+                    sf::Vector2f mousePos(event.mouseButton.x, event.mouseButton.y);
+                    Player* currentPlayer = game.getCurrentPlayer();
+                    if (currentPlayer != nullptr && currentPlayer->role() == "Spy") {
+                        for (size_t i = 0; i < targetButtons.size(); ++i) {
+                            if (targetButtons[i].getGlobalBounds().contains(mousePos)) {
+                                std::string targetName = targetTexts[i].getString();
+                                try {
+                                    Player* targetPlayer = nullptr;
+                                    for (Player* p : game.getAllPlayers()) { if (p->getName() == targetName) { targetPlayer = p; break; } }
+
+                                    if (targetPlayer != nullptr && targetPlayer->isAlive()) {
+                                        // Correctly cast to Spy* to call specific methods
+                                        Spy* spyPlayer = dynamic_cast<Spy*>(currentPlayer);
+                                        if (spyPlayer) {
+                                            spyPlayer->revealCoins(*targetPlayer); // reveals the amount of coins
+                                            spyPlayer->preventArrest(*targetPlayer); // prevents arrest
+                                            addGameLogEntry(currentPlayer->getName() + " (Spy) used Spy Action on " + targetName + "!");
+                                            addGameLogEntry(targetName + " has " + std::to_string(targetPlayer->getCoins()) + " coins.");
+                                            addGameLogEntry(targetName + " cannot use Arrest next turn.");
+                                        } else {
+                                            triggerErrorPopup("Internal Error: Player is not a Spy despite role() returning Spy.", font);
+                                        }
+                                    } else { triggerErrorPopup("Target " + targetName + " is invalid or not found.", font); }
+                                } catch (const std::exception& e) {
+                                    triggerErrorPopup("Spy Action Error: " + std::string(e.what()), font);
+                                }
+                                currentState = PLAYING; // Spy action doesn't end turn
+                                actionPerformedThisClick = true;
+                                break;
+                            }
+                        }
+                    }
+                }
+                if (event.type == sf::Event::KeyPressed && event.key.code == sf::Keyboard::Escape) {
+                    currentState = PLAYING; addGameLogEntry("Spy Action cancelled."); actionPerformedThisClick = true;
+                }
+            }
+
 
             if (event.type == sf::Event::MouseButtonReleased) {
                 actionPerformedThisClick = false;
             }
         }
 
-        window.clear(sf::Color(30, 30, 30)); // Dark background for the game
+        window.clear(sf::Color(30, 30, 30));
 
         // === Draw game elements based on state ===
+        // Player Entry Screen
         if (currentState == ENTERING_PLAYERS) {
             sf::Text titleText = createText("Enter Player Names (2-6)", font, 28, 50, 50);
             window.draw(titleText);
@@ -325,8 +572,8 @@ int main() {
             window.draw(playersLabel);
             for (size_t i = 0; i < enteredPlayers.size(); ++i) {
                 std::string playerDisplay = std::to_string(i + 1) + ". " + enteredPlayers[i];
-                sf::Text playerText = createText(playerDisplay, font, 18, 70, 190 + i * 25);
-                window.draw(playerText);
+                sf::Text playerTextToDraw = createText(playerDisplay, font, 18, 70, 190 + i * 25);
+                window.draw(playerTextToDraw);
             }
             std::string instruction = "Players: " + std::to_string(enteredPlayers.size()) + "/6";
             sf::Text instructionText = createText(instruction, font, 16, 50, 340);
@@ -340,54 +587,39 @@ int main() {
                 window.draw(startGameText);
             }
         }
-        else if (currentState == PLAYING || currentState == SELECTING_ARREST_TARGET) {
-            std::string turnTitle = "Turn: " + game.turn();
-            if(currentState == SELECTING_ARREST_TARGET) turnTitle += " - Select Arrest Target (ESC to cancel)";
-            sf::Text turnText = createText(turnTitle, font, 24, 20, 20); // Adjusted X for more space
+        // Playing, Selecting Target Screens
+        else if (currentState == PLAYING || currentState == SELECTING_ARREST_TARGET || currentState == SELECTING_SANCTION_TARGET || currentState == SELECTING_COUP_TARGET || currentState == SELECTING_SPY_TARGET) {
+            std::string turnTitleStr = "Turn: " + game.turn();
+            if (currentState == SELECTING_ARREST_TARGET) turnTitleStr += " - Select Arrest Target (ESC to cancel)";
+            if (currentState == SELECTING_SANCTION_TARGET) turnTitleStr += " - Select Sanction Target (ESC to cancel)";
+            if (currentState == SELECTING_COUP_TARGET) turnTitleStr += " - Select Coup Target (ESC to cancel)";
+            if (currentState == SELECTING_SPY_TARGET) turnTitleStr += " - Select Spy Action Target (ESC to cancel)"; // New instruction
+            sf::Text turnText = createText(turnTitleStr, font, 22, 20, 20);
             window.draw(turnText);
 
-            float yPlayerInfo = 70; // Start Y for player info
-            auto playersInfo = game.getPlayersWithRoles(); //
-            Player* gameCurrentPlayer = game.getCurrentPlayer(); //
-
-            for (const auto& playerInfo : playersInfo) {
+            float yPlayerInfo = 60;
+            Player* gameCurrentPlayer = game.getCurrentPlayer();
+            for (Player* p : game.getAllPlayers()) { // Assuming getAllPlayers exists
                 std::ostringstream oss;
-                Player* p = nullptr; // Find player object to get coins
-                for(auto pl_ptr : game.getAllPlayers()){ //
-                    if(pl_ptr->getName() == playerInfo.first){
-                        p = pl_ptr;
-                        break;
+                oss << p->getName();
+                if (p->isAlive()) {
+                    oss << " (" << p->role() << ")";
+                    oss << " - Coins: " << p->getCoins();
+                    if (p->isSanctioned()) {
+                        oss << " [S]";
                     }
-                }
-
-                oss << playerInfo.first;
-                if (p && p->isAlive()) { //
-                     oss << " (" << playerInfo.second << ")"; // Show role only if alive
-                    if (p == gameCurrentPlayer || !p->isAlive()) { // Show coins for current player or if revealed (eliminated)
-                         oss << " - Coins: " << p->getCoins(); //
-                    } else {
-                        // For other alive players, you might want to hide their exact role or coin count
-                        // For this version, we show role, but coins could be '?'
-                        oss << " - Coins: " << p->getCoins(); // Or '?' if rules dictate hiding coins
+                    if (p->isPreventedFromArresting()) { // Indicate if prevented from arresting
+                        oss << " [No Arrest]";
                     }
-                    if (!p->isAlive()) oss << " (Eliminated)"; //
-
-                } else if (p && !p->isAlive()){
-                     oss << " (" << playerInfo.second << ") - Coins: " << p->getCoins() << " (Eliminated)"; //
-                }
-                else {
-                     oss << " (Error: Player data not found)";
+                } else {
+                    oss << " (" << p->role() << ") - Coins: " << p->getCoins() << " (Eliminated)";
                 }
 
-
-                sf::Text playerText = createText(oss.str(), font, 18, 20, yPlayerInfo);
-                if (p == gameCurrentPlayer && p->isAlive()) { //
-                    playerText.setFillColor(sf::Color::Yellow); // Highlight current player
-                } else if (p && !p->isAlive()){ //
-                    playerText.setFillColor(sf::Color(128,128,128)); // Grey out eliminated players
-                }
-                window.draw(playerText);
-                yPlayerInfo += 30;
+                sf::Text playerTextToDraw = createText(oss.str(), font, 16, 20, yPlayerInfo);
+                if (p == gameCurrentPlayer && p->isAlive()) { playerTextToDraw.setFillColor(sf::Color::Yellow); }
+                else if (!p->isAlive()) { playerTextToDraw.setFillColor(sf::Color(128,128,128)); }
+                window.draw(playerTextToDraw);
+                yPlayerInfo += 25;
             }
 
             if (currentState == PLAYING) {
@@ -395,72 +627,98 @@ int main() {
                 window.draw(taxButton); window.draw(taxText);
                 window.draw(bribeButton); window.draw(bribeText);
                 window.draw(arrestButton); window.draw(arrestText);
-                sf::Text instructionText = createText("Choose an action:", font, 18, 50, 460);
+                window.draw(sanctionButton); window.draw(sanctionText);
+                window.draw(coupButton); window.draw(coupText);
+                
+                // Draw special action buttons only for the relevant player
+                if (gameCurrentPlayer != nullptr) {
+                    if (gameCurrentPlayer->role() == "Baron") {
+                        window.draw(investButton); window.draw(investText);
+                    }
+                    if (gameCurrentPlayer->role() == "Spy") {
+                        window.draw(spyActionButton); window.draw(spyActionText);
+                    }
+                }
+
+                sf::Text instructionText = createText("Choose an action:", font, 18, 50, buttonYPos - 40.f);
                 window.draw(instructionText);
-            } else { // SELECTING_ARREST_TARGET
-                sf::Text instructionText = createText("Click on a player to arrest.", font, 16, 50, window.getSize().y - 50.f);
-                 window.draw(instructionText);
+            } else { // SELECTING_TARGET states
+                std::string selectInstruction = "";
+                if (currentState == SELECTING_ARREST_TARGET) {
+                    selectInstruction = "Click player to Arrest (takes 1 coin)";
+                } else if (currentState == SELECTING_SANCTION_TARGET) {
+                    selectInstruction = "Click player to Sanction (costs 3 coins)";
+                }
+                else if (currentState == SELECTING_COUP_TARGET) {
+                    selectInstruction = "Click player to Coup (costs 7 coins, eliminates them)";
+                }
+                else if (currentState == SELECTING_SPY_TARGET) { // New instruction for Spy
+                    selectInstruction = "Click player to Spy on (no cost, no turn)";
+                }
+                sf::Text instructionText = createText(selectInstruction, font, 16, 50, 120);
+                window.draw(instructionText);
                 for (size_t i = 0; i < targetButtons.size(); ++i) {
                     window.draw(targetButtons[i]);
                     window.draw(targetTexts[i]);
                 }
             }
         }
+        // Game Over Screen
+        else if (currentState == GAME_OVER) {
+            sf::Text gameOverText = createText("Game Over!", font, 40, window.getSize().x / 2.f, 150);
+            gameOverText.setOrigin(gameOverText.getLocalBounds().width / 2.f, gameOverText.getLocalBounds().height / 2.f);
+            window.draw(gameOverText);
 
-        // NEW: Draw Game Log (on the right side)
-        float currentLogY = 20.f;
-        sf::Text logTextElementProto; // Prototype for log text
-        logTextElementProto.setFont(font);
-        logTextElementProto.setCharacterSize(LOG_FONT_SIZE);
-        logTextElementProto.setFillColor(sf::Color(200, 200, 200)); // Light grey for log
+            std::string winnerMessage = "Winner: " + game.winner() + "!";
+            sf::Text winnerText = createText(winnerMessage, font, 30, window.getSize().x / 2.f, 250);
+            winnerText.setOrigin(winnerText.getLocalBounds().width / 2.f, winnerText.getLocalBounds().height / 2.0f);
+            window.draw(winnerText);
 
-        // Optional: Background for log area
-        sf::RectangleShape logAreaBg(sf::Vector2f(window.getSize().x - LOG_PANEL_X, window.getSize().y));
-        logAreaBg.setPosition(LOG_PANEL_X, 0);
-        logAreaBg.setFillColor(sf::Color(40, 40, 40, 150)); // Slightly darker, semi-transparent
-        window.draw(logAreaBg);
-
-
-        for (const auto& message : gameLog) {
-            logTextElementProto.setString(message);
-            logTextElementProto.setPosition(LOG_PANEL_X + 5.f, currentLogY); // Small padding from left of log panel
-            window.draw(logTextElementProto);
-            currentLogY += LOG_ENTRY_HEIGHT;
+            window.draw(exitGameButton);
+            window.draw(exitGameText);
         }
 
+        // Draw Game Log
+        if (currentState != GAME_OVER) { // Don't draw log on game over screen if it overlaps too much
+            float currentLogY = 20.f;
+            sf::Text logTextElementProto;
+            logTextElementProto.setFont(font);
+            logTextElementProto.setCharacterSize(LOG_FONT_SIZE);
+            logTextElementProto.setFillColor(sf::Color(200, 200, 200)); 
+            sf::RectangleShape logAreaBg(sf::Vector2f(window.getSize().x - LOG_PANEL_X, window.getSize().y));
+            logAreaBg.setPosition(LOG_PANEL_X, 0);
+            logAreaBg.setFillColor(sf::Color(40, 40, 40, 180));
+            window.draw(logAreaBg);
+            for (const auto& message : gameLog) {
+                logTextElementProto.setString(message);
+                logTextElementProto.setPosition(LOG_PANEL_X + 5.f, currentLogY);
+                window.draw(logTextElementProto);
+                currentLogY += LOG_ENTRY_HEIGHT;
+                if (currentLogY > window.getSize().y - LOG_ENTRY_HEIGHT) break;
+            }
+        }
 
-        // NEW: Draw Error Popup (on top of everything else if active)
+        // Draw Error Popup
         if (displayErrorPopup) {
             errorPopupTextElement.setFont(font);
             errorPopupTextElement.setString(currentErrorPopupMessage);
             errorPopupTextElement.setCharacterSize(ERROR_FONT_SIZE);
             errorPopupTextElement.setFillColor(sf::Color::White);
-
-            // Calculate background size based on text, with wrapping awareness (simple version)
-            // This simple version doesn't truly wrap, but tries to make background reasonable.
-            // For real wrapping, you'd need to break the string into multiple sf::Text objects.
             sf::FloatRect textBounds = errorPopupTextElement.getLocalBounds();
             float maxWidth = window.getSize().x * 0.8f;
             float textWidth = textBounds.width;
-            if (textWidth > maxWidth) textWidth = maxWidth; // Limit width
-
+            if (textWidth > maxWidth) textWidth = maxWidth; 
             float padding = 25.f;
             errorPopupBackground.setSize(sf::Vector2f(textWidth + 2 * padding, textBounds.height + 2 * padding + 15));
             errorPopupBackground.setOrigin(errorPopupBackground.getSize().x / 2.f, errorPopupBackground.getSize().y / 2.f);
             errorPopupBackground.setPosition(window.getSize().x / 2.f, window.getSize().y / 2.f);
-            
-            // Center text on the background
-            // For long text that we "limited" in width for background, actual text might still overflow.
-            // Proper wrapping is needed for perfect visual, but this positions the existing text object.
             errorPopupTextElement.setOrigin(textBounds.left + textBounds.width / 2.f, textBounds.top + textBounds.height / 2.f);
             errorPopupTextElement.setPosition(errorPopupBackground.getPosition());
-            
             window.draw(errorPopupBackground);
             window.draw(errorPopupTextElement);
         }
 
         window.display();
     }
-
     return 0;
 }
