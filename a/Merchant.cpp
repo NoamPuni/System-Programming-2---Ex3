@@ -16,9 +16,13 @@ void Merchant::onBeginTurn() {
     }
 }
 void Merchant::onArrestedBy(Player& attacker) {
-    attacker.setCoins(-1); // The attacker loses the 1 gotten coin when arresting the Merchant
-    setCoins(-1); // The Merchant loses another 1 coin when arrested
+    if (coins < 2) {
+        throw std::runtime_error("Merchant doesn't have enough coins to be arrested.");
+    }
+    this->setCoins(-2);             // Merchant pays two to the treasury
+    attacker.setCoins(0);          // The attacker doesn't gain anything
 }
+
 std::string Merchant::role() const {
     return "Merchant"; // Returns the role of the player
 }

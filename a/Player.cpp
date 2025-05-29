@@ -38,6 +38,7 @@ bool Player::isPreventedFromArresting() const {
 void Player::setCoins(int newCoins) { // Adds or subtracts coins from the player, ensuring that the total cannot go below zero
     coins += newCoins;
     if (coins < 0) {
+        coins -= newCoins;
         throw std::runtime_error("Coins cannot be negative.");
     }
 }
@@ -84,6 +85,9 @@ void Player::onBeginTurn() {
     }
 }
 void Player::gather() {
+    if (!is_my_turn) {
+        throw std::runtime_error(name + " tried to gather out of turn.");
+    }
     if (is_sanctioned) {
         throw std::runtime_error(name + " is sanctioned and can't gather.");
     }
@@ -93,6 +97,9 @@ void Player::gather() {
 }
 
 void Player::tax(Game& game) {
+    if (!is_my_turn) {
+        throw std::runtime_error(name + " tried to tax out of turn.");
+    }
     if (is_sanctioned) {
         throw std::runtime_error(name + " is sanctioned and can't tax.");
     }
@@ -116,28 +123,27 @@ void Player::bribe(Game& game) {
     // judge can undo, the coins doesn't return to the player $$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$
 } //if Judge didn't undo -gives the player another 2 turns
 
-void Player::arrest(Player* target, Game& game) { //spy can prevent
-    //if spy prevented the arrest, do nothing
-    if( isPreventedFromArresting() ) {
-        throw std::runtime_error("Spy prevented so cannot arresting other players."); 
+bool Player::arrest(Player* target, Game& game) {
+    if (isPreventedFromArresting()) {
+        throw std::runtime_error("Spy prevented the arrest.");
     }
 
     if (!target->isAlive()) {
-        throw std::runtime_error("Can't arrest non active player.");
+        throw std::runtime_error("Cannot arrest a non-active player.");
     }
 
     if (target->isLastOneArrested()) {
-        throw std::runtime_error("player cannot be arrested twice in a row.");
+        throw std::runtime_error("Player cannot be arrested twice in a row.");
     }
 
+    // ננסה לבצע את פעולת המעצר בפועל (עשויה לזרוק חריגה אם אין מספיק מטבעות)
+    target->onArrestedBy(*this); // אם נכשל - תיזרק חריגה
+
+    // אם הגענו לכאן, סימן שהמעצר הצליח => עכשיו נעדכן את מצב המשחק
     game.clearLastArrestedFlag();
+    target->gotArrested(true);
 
-    target->gotArrested(true); // Mark the target as arrested
-
-    target->onArrestedBy(*this);
-    this->setCoins(1);
-    target->setCoins(-1);  // will be overridden by specific roles
-
+    return true;
 }
 
 void Player::sanction(Player* target) {
@@ -194,7 +200,17 @@ void Player::onSanctionedBy(Player& by) {
 
     // Default implementation, can be overridden by specific roles
 }
-void Player::onArrestedBy(Player& by) {
-
+void Player::onArrestedBy(Player& attacker) {
     // Default implementation does nothing, can be overridden by specific roles
+     if (coins < 1) {
+        throw std::runtime_error("Not enough coins to be arrested.");
+    }
+    this->setCoins(-1);       // player loses 1 coin when arrested
+    attacker.setCoins(1);     // the attacker gains 1 coin
+}
+
+void Player::releaseSanction() {
+    is_sanctioned = false;
+    sanctionTurnsRemaining = 0;
+    std::cout << name << " is released from sanction." << std::endl;
 }

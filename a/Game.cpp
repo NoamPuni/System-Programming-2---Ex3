@@ -2,9 +2,20 @@
 #include <stdexcept>
 #include <algorithm>
 #include <iostream>
+#include <random>
+#include <chrono>
 
-Game::Game() : currentTurn(0), gameEnded(false) {
+// הכללת מחלקות התפקידים
+#include "Governor.hpp"
+#include "Spy.hpp"
+#include "Baron.hpp"
+#include "General.hpp"
+#include "Judge.hpp"
+#include "Merchant.hpp"
+
+Game::Game() : currentTurn(0), gameEnded(false), rng(std::chrono::steady_clock::now().time_since_epoch().count()) {
     // Constructor initializes turn index to 0 and game as not ended
+    // Initialize random number generator with current time
 }
 
 Game::~Game() {
@@ -13,6 +24,86 @@ Game::~Game() {
         delete player;
     }
     _players.clear();
+}
+
+void Game::initializeGame(const std::vector<std::string>& playerNames) {
+    // בדוק שמספר השחקנים תקין (2-6)
+    if (playerNames.size() < 2) {
+        throw std::invalid_argument("Game requires at least 2 players");
+    }
+    if (playerNames.size() > 6) {
+        throw std::invalid_argument("Game allows maximum 6 players");
+    }
+    
+    // בדוק שהמשחק עדיין לא התחיל
+    if (!_players.empty()) {
+        throw std::runtime_error("Game has already been initialized");
+    }
+    
+    // רשימת התפקידים הזמינים
+    std::vector<std::string> availableRoles = {
+        "Governor", "Spy", "Baron", "General", "Judge", "Merchant"
+    };
+    
+    // הכן מחולל מספרים אקראיים להגרלת תפקידים
+    std::uniform_int_distribution<int> roleDist(0, availableRoles.size() - 1);
+    
+    std::cout << "Initializing game with " << playerNames.size() << " players:" << std::endl;
+    
+    // צור שחקנים עם תפקידים מוגרלים באקראי (כל שחקן מקבל תפקיד אקראי)
+    for (const std::string& playerName : playerNames) {
+        // הגרל תפקיד אקראי לכל שחקן
+        int randomRoleIndex = roleDist(rng);
+        const std::string& assignedRole = availableRoles[randomRoleIndex];
+        
+        Player* newPlayer = createPlayerWithRole(playerName, assignedRole);
+        addPlayer(newPlayer);
+        
+        std::cout << "Player " << playerName << " assigned role: " << assignedRole << std::endl;
+    }
+    
+    std::cout << "Game initialized successfully!" << std::endl;
+    std::cout << "Turn order: ";
+    for (size_t i = 0; i < _players.size(); ++i) {
+        std::cout << _players[i]->getName();
+        if (i < _players.size() - 1) std::cout << " -> ";
+    }
+    std::cout << std::endl;
+    std::cout << "First turn: " << _players[0]->getName() << std::endl;
+}
+
+Player* Game::createPlayerWithRole(const std::string& name, const std::string& role) {
+    if (role == "Governor") {
+        return new Governor(name);
+    } else if (role == "Spy") {
+        return new Spy(name);
+    } else if (role == "Baron") {
+        return new Baron(name);
+    } else if (role == "General") {
+        return new General(name);
+    } else if (role == "Judge") {
+        return new Judge(name);
+    } else if (role == "Merchant") {
+        return new Merchant(name);
+    } else {
+        throw std::invalid_argument("Unknown role: " + role);
+    }
+}
+
+bool Game::canStartGame() const {
+    return _players.size() >= 2 && _players.size() <= 6 && !gameEnded;
+}
+
+std::vector<std::pair<std::string, std::string>> Game::getPlayersWithRoles() const {
+    std::vector<std::pair<std::string, std::string>> playersInfo;
+    
+    for (const Player* player : _players) {
+        if (player->isAlive()) {
+            playersInfo.emplace_back(player->getName(), player->role());
+        }
+    }
+    
+    return playersInfo;
 }
 
 void Game::addPlayer(Player* player) {
@@ -24,12 +115,17 @@ void Game::addPlayer(Player* player) {
         throw std::runtime_error("Cannot add players to an ended game");
     }
     
+    // בדוק שלא חורגים מ-6 שחקנים
+    if (_players.size() >= 6) {
+        throw std::runtime_error("Cannot add more than 6 players to the game");
+    }
+    
     _players.push_back(player);
     
-    /**If this is the first player, set their turn to true
+    //If this is the first player, set their turn to true
     if (_players.size() == 1) {
         player->setTurn(true);
-    }*/
+    }
 }
 
 void Game::nextTurn() {
@@ -40,25 +136,24 @@ void Game::nextTurn() {
     if (_players.empty()) {
         throw std::runtime_error("No players in game");
     }
+    
     // check if there are extra turns remaining to the current player
     if (extraTurnsRemaining > 0) {
         extraTurnsRemaining--;
         std::cout << _players[currentTurn]->getName() 
                   << " continues with extra turn! " 
                   << extraTurnsRemaining << " extra turns remaining." << std::endl;
-        
-        // new turn so new possible actions and blocking
+
         clearBlockableActions();
-        
-        // start the player's new turn
         _players[currentTurn]->onBeginTurn();
-        return; // Don't switch players
+        return;
     }
 
     // If no extra turns, continue normally
-
-    // Set current player's turn to false
-    _players[currentTurn]->setTurn(false);
+    // אפס את התור של כולם (גם מתים)
+    for (Player* p : _players) {
+        p->setTurn(false);
+    }
 
     // Reset arrest flags for all players except the one who was just arrested
     if (_players[currentTurn]->isLastOneArrested()) {
@@ -105,6 +200,7 @@ void Game::nextTurn() {
             std::cout << "Game ended in a draw - no players remaining!" << std::endl;
         }
     }
+    
     // Clear blockable actions when switching to new player
     clearBlockableActions();
 
@@ -114,7 +210,6 @@ void Game::nextTurn() {
                   << " has " << _players[currentTurn]->getCoins() 
                   << " coins and must perform a coup!" << std::endl;
     }
-    
 }
 
 std::string Game::turn() const {
@@ -126,7 +221,7 @@ std::string Game::turn() const {
         throw std::runtime_error("No players in game");
     }
     
-    std::cout << "Current turn: " << currentTurn << std::endl;
+    //std::cout << "Current turn: " << currentTurn << std::endl;
     return _players[currentTurn]->getName();
 }
 
@@ -271,6 +366,35 @@ Player* Game::getCurrentPlayer() const {
 
 // דוגמת שימוש במשחק:
 /*
+// יצירת משחק חדש
+Game game;
+
+// קבלת שמות שחקנים מהממשק הגרפי
+std::vector<std::string> playerNames = {"Alice", "Bob", "Charlie", "Diana"};
+
+// איתחול המשחק
+try {
+    game.initializeGame(playerNames);
+    
+    // המשחק מוכן להתחיל
+    std::cout << "Current turn: " << game.turn() << std::endl;
+    
+    // הצגת מידע על השחקנים
+    auto playersInfo = game.getPlayersWithRoles();
+    for (const auto& info : playersInfo) {
+        std::cout << info.first << " (" << info.second << ")" << std::endl;
+    }
+    
+    // דוגמה לפלט אפשרי:
+    // Player Alice assigned role: Judge
+    // Player Bob assigned role: Governor  
+    // Player Charlie assigned role: Judge
+    // Player Diana assigned role: Merchant
+    
+} catch (const std::exception& e) {
+    std::cerr << "Error: " << e.what() << std::endl;
+}
+
 // דוגמה 1: שוחד
 player->bribe(game); // מיידי: -4 מטבעות + רישום לחסימה
 
@@ -307,4 +431,3 @@ if (general->canBlockCoup()) {
 // כשמתחיל התור הבא:
 game.nextTurn(); // מנקה את כל האפשרויות לחסימה אוטומטית
 */
-

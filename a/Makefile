@@ -66,6 +66,9 @@ clean-gui:
 # לבנות את הגרסה הגרפית
 #// make gui
 
+#להריץ GUI
+#// ./coup_gui
+
 # לבנות הכל
 #// make all
 

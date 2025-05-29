@@ -3,6 +3,7 @@
 
 #include <vector>
 #include <string>
+#include <random>
 #include "Player.hpp"
 
 class Game {
@@ -21,10 +22,20 @@ private:
     // Extra turns system for bribe
     int extraTurnsRemaining = 0; 
 
+    // Random number generator for role assignment
+    mutable std::mt19937 rng;
+
+    // Helper method to create player with specific role
+    Player* createPlayerWithRole(const std::string& name, const std::string& role);
+
 public:
     // Constructor and Destructor
     Game();
     ~Game();
+
+    // Game initialization methods
+    void initializeGame(const std::vector<std::string>& playerNames);
+    bool canStartGame() const; // Check if game can start (2-6 players)
 
     // Core game methods
     void addPlayer(Player* player);
@@ -60,9 +71,15 @@ public:
     bool hasExtraTurns() const { return extraTurnsRemaining > 0; }
     int getExtraTurnsRemaining() const { return extraTurnsRemaining; }
     
+    // Get player roles information
+    std::vector<std::pair<std::string, std::string>> getPlayersWithRoles() const;
+    
     // Prevent copy constructor and assignment operator
     Game(const Game&) = delete;
     Game& operator=(const Game&) = delete;
+
+    // Get all players (add this method)
+    const std::vector<Player*>& getAllPlayers() const { return _players; }
 };
 
 #endif // GAME_HPP
