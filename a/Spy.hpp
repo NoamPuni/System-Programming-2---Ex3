@@ -7,7 +7,6 @@
     class Spy : public Player {
     public:
         Spy(const std::string& name);
-        ~Spy() override = default;
 
         // special abilities of Spy - doesnt count as a turn
         void revealCoins(Player& targetPlayer) const; // reveals the number of coins of targetPlayer

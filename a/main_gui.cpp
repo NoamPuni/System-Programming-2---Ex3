@@ -1,3 +1,4 @@
+// main_gui.cpp
 #include <SFML/Graphics.hpp>
 #include <iostream>
 #include <vector>
@@ -5,9 +6,13 @@
 #include <sstream>
 #include <deque>
 #include "Game.hpp"
-#include "Player.hpp" // ודא שזה כלול עבור Player*
-#include "Baron.hpp" // Include Baron.hpp for Baron specific methods
-#include "Spy.hpp"   // Include Spy.hpp for Spy specific methods
+#include "Player.hpp"
+#include "Baron.hpp"
+#include "Spy.hpp"
+#include "Governor.hpp" // Include Governor.hpp for Governor specific methods
+#include "General.hpp"
+#include "Judge.hpp"
+#include "Merchant.hpp"
 
 // Helper function to create text elements
 sf::Text createText(const std::string& content, const sf::Font& font, unsigned int size, float x, float y) {
@@ -48,6 +53,13 @@ void triggerErrorPopup(const std::string& message, const sf::Font& font) {
     displayErrorPopup = true;
 }
 
+// Helper function to center text on a button
+auto centerTextOnButton = [](sf::Text& text, const sf::RectangleShape& button) {
+    sf::FloatRect textRect = text.getLocalBounds();
+    text.setOrigin(textRect.left + textRect.width / 2.0f, textRect.top + textRect.height / 2.0f);
+    text.setPosition(button.getPosition().x + button.getSize().x / 2.0f, button.getPosition().y + button.getSize().y / 2.0f -2);
+};
+
 
 int main() {
     sf::Font font;
@@ -61,7 +73,16 @@ int main() {
     window.setFramerateLimit(60);
 
     // Game states
-    enum GameState { ENTERING_PLAYERS, PLAYING, SELECTING_ARREST_TARGET, SELECTING_SANCTION_TARGET, SELECTING_COUP_TARGET, SELECTING_SPY_TARGET, GAME_OVER }; // Added SELECTING_SPY_TARGET
+    enum GameState { 
+        ENTERING_PLAYERS, 
+        PLAYING, 
+        SELECTING_ARREST_TARGET, 
+        SELECTING_SANCTION_TARGET, 
+        SELECTING_COUP_TARGET, 
+        SELECTING_SPY_TARGET, 
+        BLOCKING_ACTION, // New state for blocking actions
+        GAME_OVER 
+    }; 
     GameState currentState = ENTERING_PLAYERS;
 
     std::vector<std::string> enteredPlayers;
@@ -71,6 +92,13 @@ int main() {
     std::vector<sf::RectangleShape> targetButtons;
     std::vector<sf::Text> targetTexts;
     
+    // Variables for blocking state
+    Player* actionPerformer = nullptr; // Player who performed the action being blocked
+    std::string actionTypeToBlock = ""; // e.g., "Tax", "Bribe", "Coup"
+    int currentBlockerIndex = -1; // Index in _players vector of the potential blocker
+    std::vector<Player*> potentialBlockers; // List of players who can block
+    int pendingTaxAmount = 0; // NEW: To store the amount of coins for a pending tax action
+
     // Action buttons - Re-layout for 6 buttons (including Coup)
     float buttonWidth = 90.f; // Adjusted for 6 buttons
     float buttonHeight = 35.f; // Adjusted for 6 buttons
@@ -127,6 +155,19 @@ int main() {
     spyActionButton.setPosition(currentButtonX - buttonWidth - buttonSpacing, buttonYPos - 45); // Above standard buttons
     sf::Text spyActionText = createText("Spy Action", font, 13, 0, 0);
 
+    // Blocking Action Buttons
+    sf::RectangleShape blockButton(sf::Vector2f(120, 40));
+    blockButton.setFillColor(sf::Color(200, 50, 50)); // Red for Block
+    blockButton.setPosition(window.getSize().x / 2.f - 130, 450);
+    sf::Text blockText = createText("Block", font, 20, 0, 0);
+    centerTextOnButton(blockText, blockButton);
+
+    sf::RectangleShape passBlockButton(sf::Vector2f(120, 40));
+    passBlockButton.setFillColor(sf::Color(50, 150, 50)); // Green for Pass
+    passBlockButton.setPosition(window.getSize().x / 2.f + 10, 450);
+    sf::Text passBlockText = createText("Pass", font, 20, 0, 0);
+    centerTextOnButton(passBlockText, passBlockButton);
+
 
     // Player entry buttons
     sf::RectangleShape enterPlayerButton(sf::Vector2f(150, 40));
@@ -145,24 +186,20 @@ int main() {
     exitGameButton.setPosition(window.getSize().x / 2.f - exitGameButton.getSize().x / 2.f, 400);
     sf::Text exitGameText = createText("Exit Game", font, 20, 0, 0);
 
-    // Center texts on buttons helper
-    auto centerTextOnButton = [](sf::Text& text, const sf::RectangleShape& button) {
-        sf::FloatRect textRect = text.getLocalBounds();
-        text.setOrigin(textRect.left + textRect.width / 2.0f, textRect.top + textRect.height / 2.0f);
-        text.setPosition(button.getPosition().x + button.getSize().x / 2.0f, button.getPosition().y + button.getSize().y / 2.0f -2);
-    };
-
+    // Center texts on buttons helper (re-calling for new buttons)
     centerTextOnButton(gatherText, gatherButton);
     centerTextOnButton(taxText, taxButton);
     centerTextOnButton(bribeText, bribeButton);
     centerTextOnButton(arrestText, arrestButton);
     centerTextOnButton(sanctionText, sanctionButton);
     centerTextOnButton(coupText, coupButton);
-    centerTextOnButton(investText, investButton); // Center Invest button text
-    centerTextOnButton(spyActionText, spyActionButton); // Center Spy Action button text
+    centerTextOnButton(investText, investButton);
+    centerTextOnButton(spyActionText, spyActionButton);
     centerTextOnButton(exitGameText, exitGameButton);
+    centerTextOnButton(blockText, blockButton);
+    centerTextOnButton(passBlockText, passBlockButton);
 
-    bool actionPerformedThisClick = false;
+    bool actionPerformedThisClick = false; // Prevents multiple actions on single click
 
     errorPopupBackground.setFillColor(sf::Color(70, 70, 70, 230));
     errorPopupBackground.setOutlineColor(sf::Color::Red);
@@ -259,18 +296,43 @@ int main() {
                         try {
                             // Standard Actions
                             if (gatherButton.getGlobalBounds().contains(mousePos)) {
-                                currentPlayer->gather();
+                                currentPlayer->gather(game); // Pass game reference
                                 addGameLogEntry(currentPlayer->getName() + " gathered 1 coin.");
                                 game.nextTurn();
                                 actionPerformedThisClick = true;
                             }
                             else if (taxButton.getGlobalBounds().contains(mousePos)) {
-                                currentPlayer->tax(game);
-                                addGameLogEntry(currentPlayer->getName() + " performed tax.");
-                                game.nextTurn();
+                                // NEW: Get the amount first, but don't add coins yet.
+                                pendingTaxAmount = currentPlayer->tax(game); // Pass game reference
+                                game.recordTax(currentPlayer, pendingTaxAmount); // Record the tax action with amount
+                                
+                                addGameLogEntry(currentPlayer->getName() + " performed tax (pending " + std::to_string(pendingTaxAmount) + " coins).");
+                                
+                                // Check for potential blockers
+                                potentialBlockers.clear();
+                                for (Player* p : game.getAllPlayers()) {
+                                    if (p->isAlive() && p != currentPlayer && p->canBlockTax()) {
+                                        potentialBlockers.push_back(p);
+                                    }
+                                }
+
+                                if (!potentialBlockers.empty()) {
+                                    currentBlockerIndex = 0; // Start with the first potential blocker
+                                    actionPerformer = currentPlayer;
+                                    actionTypeToBlock = "Tax";
+                                    currentState = BLOCKING_ACTION;
+                                    addGameLogEntry("A Tax action was performed. Checking for blocks...");
+                                } else {
+                                    // NEW: No one can block, so apply the tax immediately
+                                    currentPlayer->setCoins(pendingTaxAmount);
+                                    addGameLogEntry(currentPlayer->getName() + " received " + std::to_string(pendingTaxAmount) + " coins from Tax.");
+                                    game.nextTurn(); // Proceed to next turn
+                                    pendingTaxAmount = 0; // Reset
+                                }
                                 actionPerformedThisClick = true;
                             }
                             else if (bribeButton.getGlobalBounds().contains(mousePos)) {
+                                // game.recordBribe(currentPlayer); // If bribe becomes blockable
                                 currentPlayer->bribe(game);
                                 addGameLogEntry(currentPlayer->getName() + " performed bribe.");
                                 game.nextTurn(); 
@@ -314,7 +376,7 @@ int main() {
                                     for (Player* p : allPlayers) {
                                         if (p->isAlive() && p != currentPlayer) {
                                             sf::RectangleShape targetBtn(sf::Vector2f(200, 40));
-                                            targetBtn.setFillColor(sf::Color(255,165,0));
+                                            targetBtn.setFillColor(sf::Color(255, 165, 0)); // Orange color for Sanction
                                             targetBtn.setPosition(window.getSize().x / 2.f - targetBtn.getSize().x / 2.f, yPos);
                                             targetButtons.push_back(targetBtn);
                                             sf::Text targetTxt = createText(p->getName(), font, 18, 0, 0);
@@ -334,6 +396,7 @@ int main() {
                             }
                             else if (coupButton.getGlobalBounds().contains(mousePos)) {
                                 if (currentPlayer->getCoins() >= 7) {
+                                    // game.recordCoup(currentPlayer, targetPlayer); // If coup becomes blockable
                                     addGameLogEntry(currentPlayer->getName() + " chooses Coup target...");
                                     currentState = SELECTING_COUP_TARGET;
                                     targetButtons.clear(); targetTexts.clear();
@@ -360,14 +423,12 @@ int main() {
                                 }
                                 actionPerformedThisClick = true;
                             }
-                            // Special Actions (Spy, Baron)
+                            // Special Actions (Baron, Spy)
                             else if (currentPlayer->role() == "Baron" && investButton.getGlobalBounds().contains(mousePos)) {
-                                // Correctly cast to Baron* to call invest()
                                 Baron* baronPlayer = dynamic_cast<Baron*>(currentPlayer);
                                 if (baronPlayer) {
-                                    baronPlayer->invest();
+                                    baronPlayer->invest(); 
                                     addGameLogEntry(currentPlayer->getName() + " (Baron) invested and gained 6 coins.");
-                                    // Baron's invest is not a turn-ending action
                                 } else {
                                     triggerErrorPopup("Internal Error: Player is not a Baron despite role() returning Baron.", font);
                                 }
@@ -454,7 +515,7 @@ int main() {
                                     for (Player* p : game.getAllPlayers()) { if (p->getName() == targetName) { targetPlayer = p; break; } }
 
                                     if (targetPlayer != nullptr && targetPlayer->isAlive()) {
-                                        currentPlayer->sanction(targetPlayer);
+                                        currentPlayer->sanction(targetPlayer, game); // Pass game reference
                                         addGameLogEntry(currentPlayer->getName() + " sanctioned " + targetName + ".");
                                         game.nextTurn();
                                     } else { triggerErrorPopup("Target " + targetName + " is invalid or not found.", font); }
@@ -511,7 +572,6 @@ int main() {
                     currentState = PLAYING; addGameLogEntry("Coup action cancelled."); actionPerformedThisClick = true;
                 }
             }
-            // New state for Spy Action target selection
             else if (currentState == SELECTING_SPY_TARGET) {
                 if (event.type == sf::Event::MouseButtonPressed && !actionPerformedThisClick) {
                     sf::Vector2f mousePos(event.mouseButton.x, event.mouseButton.y);
@@ -525,11 +585,10 @@ int main() {
                                     for (Player* p : game.getAllPlayers()) { if (p->getName() == targetName) { targetPlayer = p; break; } }
 
                                     if (targetPlayer != nullptr && targetPlayer->isAlive()) {
-                                        // Correctly cast to Spy* to call specific methods
                                         Spy* spyPlayer = dynamic_cast<Spy*>(currentPlayer);
                                         if (spyPlayer) {
-                                            spyPlayer->revealCoins(*targetPlayer); // reveals the amount of coins
-                                            spyPlayer->preventArrest(*targetPlayer); // prevents arrest
+                                            spyPlayer->revealCoins(*targetPlayer);
+                                            spyPlayer->preventArrest(*targetPlayer);
                                             addGameLogEntry(currentPlayer->getName() + " (Spy) used Spy Action on " + targetName + "!");
                                             addGameLogEntry(targetName + " has " + std::to_string(targetPlayer->getCoins()) + " coins.");
                                             addGameLogEntry(targetName + " cannot use Arrest next turn.");
@@ -549,6 +608,69 @@ int main() {
                 }
                 if (event.type == sf::Event::KeyPressed && event.key.code == sf::Keyboard::Escape) {
                     currentState = PLAYING; addGameLogEntry("Spy Action cancelled."); actionPerformedThisClick = true;
+                }
+            }
+            else if (currentState == BLOCKING_ACTION) {
+                if (event.type == sf::Event::MouseButtonPressed && !actionPerformedThisClick) {
+                    sf::Vector2f mousePos(event.mouseButton.x, event.mouseButton.y);
+                    
+                    if (currentBlockerIndex < potentialBlockers.size()) {
+                        Player* currentBlocker = potentialBlockers[currentBlockerIndex];
+
+                        if (blockButton.getGlobalBounds().contains(mousePos)) {
+                            bool blocked = false;
+                            try {
+                                if (actionTypeToBlock == "Tax") {
+                                    // game.tryBlockTax returns true if blocked. It handles undoing the tax logic.
+                                    blocked = game.tryBlockTax(currentBlocker); 
+                                }
+                                // Add other blockable actions here (e.g., Bribe, Coup)
+                            } catch (const std::exception& e) {
+                                triggerErrorPopup("Block Error: " + std::string(e.what()), font);
+                            }
+
+                            if (blocked) {
+                                // If blocked, the action was effectively undone by game.tryBlockTax
+                                // The original tax amount is set to 0 within game.tryBlockTax
+                                addGameLogEntry("Tax action BLOCKED by " + currentBlocker->getName() + "!");
+                                pendingTaxAmount = 0; // Ensure no coins are added after a successful block
+                                game.nextTurn(); // Proceed to next turn
+                                currentState = PLAYING;
+                            } else {
+                                // If block attempt failed (e.g., not correct role), move to next blocker or action stands
+                                addGameLogEntry(currentBlocker->getName() + " tried to block, but failed or cannot block.");
+                                currentBlockerIndex++;
+                                if (currentBlockerIndex >= potentialBlockers.size()) {
+                                    addGameLogEntry("No more players can block this action. Action stands.");
+                                    // NEW: Apply the tax since no one blocked it successfully
+                                    actionPerformer->setCoins(pendingTaxAmount);
+                                    addGameLogEntry(actionPerformer->getName() + " received " + std::to_string(pendingTaxAmount) + " coins from Tax.");
+                                    game.nextTurn();
+                                    currentState = PLAYING;
+                                    pendingTaxAmount = 0; // Reset
+                                } else {
+                                    addGameLogEntry("Moving to next potential blocker: " + potentialBlockers[currentBlockerIndex]->getName());
+                                }
+                            }
+                            actionPerformedThisClick = true;
+                        }
+                        else if (passBlockButton.getGlobalBounds().contains(mousePos)) {
+                            addGameLogEntry(currentBlocker->getName() + " chose NOT to block " + actionTypeToBlock + ".");
+                            currentBlockerIndex++; // Move to next potential blocker
+                            if (currentBlockerIndex >= potentialBlockers.size()) {
+                                addGameLogEntry("No more players can block this action. Action stands.");
+                                // NEW: Apply the tax since all players passed
+                                actionPerformer->setCoins(pendingTaxAmount);
+                                addGameLogEntry(actionPerformer->getName() + " received " + std::to_string(pendingTaxAmount) + " coins from Tax.");
+                                game.nextTurn(); // Action stands, proceed to next turn
+                                currentState = PLAYING;
+                                pendingTaxAmount = 0; // Reset
+                            } else {
+                                addGameLogEntry("Moving to next potential blocker: " + potentialBlockers[currentBlockerIndex]->getName());
+                            }
+                            actionPerformedThisClick = true;
+                        }
+                    }
                 }
             }
 
@@ -587,13 +709,21 @@ int main() {
                 window.draw(startGameText);
             }
         }
-        // Playing, Selecting Target Screens
-        else if (currentState == PLAYING || currentState == SELECTING_ARREST_TARGET || currentState == SELECTING_SANCTION_TARGET || currentState == SELECTING_COUP_TARGET || currentState == SELECTING_SPY_TARGET) {
+        // Playing, Selecting Target, Blocking Action Screens
+        else if (currentState == PLAYING || currentState == SELECTING_ARREST_TARGET || currentState == SELECTING_SANCTION_TARGET || currentState == SELECTING_COUP_TARGET || currentState == SELECTING_SPY_TARGET || currentState == BLOCKING_ACTION) {
             std::string turnTitleStr = "Turn: " + game.turn();
             if (currentState == SELECTING_ARREST_TARGET) turnTitleStr += " - Select Arrest Target (ESC to cancel)";
             if (currentState == SELECTING_SANCTION_TARGET) turnTitleStr += " - Select Sanction Target (ESC to cancel)";
             if (currentState == SELECTING_COUP_TARGET) turnTitleStr += " - Select Coup Target (ESC to cancel)";
-            if (currentState == SELECTING_SPY_TARGET) turnTitleStr += " - Select Spy Action Target (ESC to cancel)"; // New instruction
+            if (currentState == SELECTING_SPY_TARGET) turnTitleStr += " - Select Spy Action Target (ESC to cancel)";
+            if (currentState == BLOCKING_ACTION) {
+                 if (currentBlockerIndex != -1 && currentBlockerIndex < potentialBlockers.size()) {
+                    turnTitleStr = "BLOCK OPPORTUNITY: " + potentialBlockers[currentBlockerIndex]->getName();
+                    turnTitleStr += " (" + potentialBlockers[currentBlockerIndex]->role() + ") can block " + actionPerformer->getName() + "'s " + actionTypeToBlock + "!";
+                 } else {
+                     turnTitleStr = "Resolving Action..."; // Fallback if index is out of bounds
+                 }
+            }
             sf::Text turnText = createText(turnTitleStr, font, 22, 20, 20);
             window.draw(turnText);
 
@@ -616,7 +746,14 @@ int main() {
                 }
 
                 sf::Text playerTextToDraw = createText(oss.str(), font, 16, 20, yPlayerInfo);
-                if (p == gameCurrentPlayer && p->isAlive()) { playerTextToDraw.setFillColor(sf::Color::Yellow); }
+                // Highlight current player only if it's their turn for main actions
+                if (currentState == PLAYING && p == gameCurrentPlayer && p->isAlive()) { 
+                    playerTextToDraw.setFillColor(sf::Color::Yellow); 
+                }
+                // Highlight potential blocker in BLOCKING_ACTION state
+                else if (currentState == BLOCKING_ACTION && currentBlockerIndex != -1 && p == potentialBlockers[currentBlockerIndex]) {
+                     playerTextToDraw.setFillColor(sf::Color::Cyan); // Highlight active blocker
+                }
                 else if (!p->isAlive()) { playerTextToDraw.setFillColor(sf::Color(128,128,128)); }
                 window.draw(playerTextToDraw);
                 yPlayerInfo += 25;
@@ -642,7 +779,15 @@ int main() {
 
                 sf::Text instructionText = createText("Choose an action:", font, 18, 50, buttonYPos - 40.f);
                 window.draw(instructionText);
-            } else { // SELECTING_TARGET states
+            } else if (currentState == BLOCKING_ACTION) {
+                sf::Text instructionText = createText("Do you want to block this action?", font, 18, window.getSize().x / 2.f - 150, 380);
+                window.draw(instructionText);
+                window.draw(blockButton);
+                window.draw(blockText);
+                window.draw(passBlockButton);
+                window.draw(passBlockText);
+            }
+            else { // SELECTING_TARGET states
                 std::string selectInstruction = "";
                 if (currentState == SELECTING_ARREST_TARGET) {
                     selectInstruction = "Click player to Arrest (takes 1 coin)";

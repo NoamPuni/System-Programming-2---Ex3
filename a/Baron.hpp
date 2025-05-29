@@ -8,13 +8,13 @@
 class Baron : public Player {
 public:
     Baron(const std::string& name);
-    ~Baron() override = default;
+
 
     void invest(); // Baron can invest
     std::string role() const override; // Returns the role of the player
 
     //override methods
-    void onSanctionedBy(Player& attacker) override;
+    void onSanctionedBy(Player& attacker, Game& game) override;
 };
 
 #endif // BARON_HPP

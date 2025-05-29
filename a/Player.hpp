@@ -1,3 +1,4 @@
+// Player.hpp
 #pragma once
 #include <string>
 #include <memory>
@@ -25,6 +26,7 @@ protected:
     int sanctionTurnsRemaining = 0;
 public:
     Player(const std::string& name);
+    virtual ~Player() {}
 
     // getters
     std::string getName() const;
@@ -36,7 +38,7 @@ public:
     bool isPreventedFromArresting() const; 
 
     //  setters and state changes
-    void setCoins(int newCoins);    
+    void setCoins(int newCoins);  
     void gotArrested(bool flag = true);// Marks the player as arrested, default to true
     void sanctionMe();
     void eliminateMe();
@@ -48,12 +50,12 @@ public:
 
     // actions that can be performed by the player
     virtual void onBeginTurn(); // called at the beginning of the player's turn, can be overridden by specific roles
-    virtual void gather(); // any player can gather coins, unless sanctioned
-    virtual void tax(Game& game);    // דיפולט: +2; Governor: +3; Governor can block
+    virtual void gather(Game& game); // any player can gather coins, unless sanctioned - Added Game& game parameter
+    virtual int tax(Game& game);    // MODIFIED: Returns the amount of coins to be taxed. Doesn't add coins itself.
     virtual void bribe(Game& game);  // דיפולט: -4; Judge יכול לבטל
     virtual bool coup(Player* target, Game& game); // -7, מוציא שחקן מהמשחק; General can block
     virtual bool arrest(Player* target, Game& game); // רווח לעצמי, נזק למטרה ;spy can prevent
-    virtual bool sanction(Player* target); // -3, מסנדק שחקן
+    virtual void sanction(Player* target, Game& game); // -3, מסנדק שחקן - Added Game& game parameter
 
     // יכולות מיוחדות שנבדקות במשחק
     virtual std::string role() const = 0; // returns the role of the player, e.g., "Governor", "Judge", etc.
@@ -63,8 +65,6 @@ public:
     virtual bool canUndoBribe() const;
     virtual bool canBlockTax() const;
     virtual bool canPreventArrest() const;
-    virtual void onSanctionedBy(Player& by);
-    virtual void onArrestedBy(Player& by);
-
-    virtual ~Player() = default;
+    virtual void onSanctionedBy(Player& by, Game& game); // Added Game& game
+    virtual void onArrestedBy(Player& attacker, Game& game); // Added Game& game
 };

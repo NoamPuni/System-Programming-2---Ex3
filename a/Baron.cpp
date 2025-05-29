@@ -7,9 +7,12 @@ Baron::Baron(const std::string& name) : Player(name) {
     // Constructor initializes the Baron with a name
 }
 void Baron::invest() {
+    if (coins < 3) { // בדיקת עלות
+        throw std::runtime_error(name + " doesn't have enough coins to invest (needs 3).");
+    }
         setCoins(3); // Example: Baron can invest and gain 3 coins
     }
-void Baron::onSanctionedBy(Player& attacker) {
+void Baron::onSanctionedBy(Player& attacker, Game& game) {
     if (is_sanctioned) {
         throw std::runtime_error(name + " is already sanctioned.");
     }

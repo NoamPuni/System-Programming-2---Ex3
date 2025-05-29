@@ -51,35 +51,35 @@ int main() {
     cout << game_1.turn() << endl;
     
     cout << "\n=== Round 1 - Everyone Gathers ===" << endl;
-    governor->gather();
+    governor->gather(game_1);
     game_1.nextTurn();
     
-    spy->gather();
+    spy->gather(game_1);
     game_1.nextTurn();
     
-    baron->gather();
+    baron->gather(game_1);
     game_1.nextTurn();
     
-    general->gather();
+    general->gather(game_1);
     game_1.nextTurn();
     
-    judge->gather();
+    judge->gather(game_1);
     game_1.nextTurn();
     
-    merchant->gather();
+    merchant->gather(game_1);
     game_1.nextTurn();
     
     // Expected exception - Not spy's turn (it's governor's turn now)
     cout << "\n=== Testing Invalid Turn ===" << endl;
     cout << "Current turn: " << game_1.turn() << endl;
     try{
-        spy->gather();
+        spy->gather(game_1);
     } catch (const std::exception &e){
         std::cerr << "Exception: " << e.what() << '\n';
     }
     
     cout << "\n=== Round 2 ===" << endl;
-    governor->gather();
+    governor->gather(game_1);
     game_1.nextTurn();
     
     spy->tax(game_1);  // Spy uses tax action
@@ -89,16 +89,16 @@ int main() {
     cout << "Spy coins: " << spy->getCoins() << endl; // Expected: 3
     
     cout << "\n=== Testing Baron's Investment ===" << endl;
-    baron->gather();  // Baron gets another coin first
+    baron->gather(game_1);  // Baron gets another coin first
     game_1.nextTurn();
     
-    general->gather();
+    general->gather(game_1);
     game_1.nextTurn();
     
-    judge->gather(); 
+    judge->gather(game_1); 
     game_1.nextTurn();
     
-    merchant->gather();
+    merchant->gather(game_1);
     game_1.nextTurn();
     
     // Now baron has 3 coins, can invest
@@ -108,28 +108,28 @@ int main() {
     game_1.nextTurn();
     
     cout << "\n=== More Rounds ===" << endl;
-    spy->gather();
+    spy->gather(game_1);
     game_1.nextTurn();
     
-    baron->gather(); // Baron gets one more coin
+    baron->gather(game_1); // Baron gets one more coin
     game_1.nextTurn();
     
-    general->gather();
+    general->gather(game_1);
     game_1.nextTurn();
     
-    judge->gather();
+    judge->gather(game_1);
     game_1.nextTurn();
     
-    merchant->gather();
+    merchant->gather(game_1);
     game_1.nextTurn();
     
     governor->tax(game_1);
     game_1.nextTurn();
     
-    spy->gather();
+    spy->gather(game_1);
     game_1.nextTurn();
     
-    baron->gather(); // Baron gets another coin to reach 7 for coup
+    baron->gather(game_1); // Baron gets another coin to reach 7 for coup
     game_1.nextTurn();
     
     cout << "Baron coins: " << baron->getCoins() << endl; // Should be 7 now
@@ -143,9 +143,9 @@ int main() {
     } else {
         cout << "Baron doesn't have enough coins for coup, gathering more..." << endl;
         // Give baron more coins
-        baron->gather();
+        baron->gather(game_1);
         game_1.nextTurn();
-        general->gather();
+        general->gather(game_1);
         game_1.nextTurn();
         if (baron->getCoins() >= 7) {
             baron->coup(governor, game_1);
@@ -177,9 +177,9 @@ int main() {
     cout << "\n=== Testing Bribe and Extra Turns ===" << endl;
     // Make sure we have enough coins for bribe test
     while (judge->getCoins() < 4) {
-        judge->gather();
+        judge->gather(game_1);
         game_1.nextTurn();
-        merchant->gather();
+        merchant->gather(game_1);
         game_1.nextTurn();
     }
     
@@ -190,31 +190,31 @@ int main() {
         cout << "Extra turns remaining: " << game_1.getExtraTurnsRemaining() << endl;
         
         // Judge can now do extra actions
-        judge->gather();
-        judge->gather();
+        judge->gather(game_1);
+        judge->gather(game_1);
         game_1.nextTurn();
     }
     
     cout << "\n=== Testing Sanction ===" << endl;
     // Make sure merchant has enough coins for sanction
     while (merchant->getCoins() < 3) {
-        merchant->gather();
+        merchant->gather(game_1);
         game_1.nextTurn();
         if (spy->isAlive()) {
-            spy->gather();
+            spy->gather(game_1);
             game_1.nextTurn();
         }
     }
     
     cout << "Merchant coins before sanction: " << merchant->getCoins() << endl;
     if (merchant->getCoins() >= 3 && spy->isAlive()) {
-        merchant->sanction(spy); // Merchant sanctions spy (costs 3 coins)
+        merchant->sanction(spy, game_1); // Merchant sanctions spy (costs 3 coins)
         cout << "Spy sanctioned successfully" << endl;
         game_1.nextTurn();
         
         // Spy is now sanctioned and cannot use economic actions
         try {
-            spy->gather(); // This should fail because spy is sanctioned
+            spy->gather(game_1); // This should fail because spy is sanctioned
         } catch (const std::exception &e) {
             std::cerr << "Sanction working: " << e.what() << '\n';
         }

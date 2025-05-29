@@ -1,3 +1,4 @@
+// Governor.hpp
 #ifndef GOVERNOR_HPP
 #define GOVERNOR_HPP
 #include "Player.hpp"
@@ -12,7 +13,7 @@ public:
     Governor(const std::string& name);
     ~Governor() = default;
 
-    void tax(Game& game) override; // Governor can tax 3 coins
+    int tax(Game& game) override; // MODIFIED: Governor can tax 3 coins, returns amount
     void blockTax(Game& game); // Governor can block tax actions
     std::string role() const override; // Returns the role of the player
     bool canBlockTax() const override; // Governor can block tax actions

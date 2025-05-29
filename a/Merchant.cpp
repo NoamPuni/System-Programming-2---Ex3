@@ -15,7 +15,7 @@ void Merchant::onBeginTurn() {
         std::cout << name << " has too many coins and must coup or lose coins."<< std::endl;
     }
 }
-void Merchant::onArrestedBy(Player& attacker) {
+void Merchant::onArrestedBy(Player& attacker, Game& game) {
     if (coins < 2) {
         throw std::runtime_error("Merchant doesn't have enough coins to be arrested.");
     }

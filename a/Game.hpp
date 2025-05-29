@@ -1,3 +1,4 @@
+// Game.hpp
 #ifndef GAME_HPP
 #define GAME_HPP
 
@@ -16,6 +17,7 @@ private:
     // Blocking system - used to manage actions that can be blocked or undone
     Player* lastActionPlayer = nullptr;
     Player* coupTarget = nullptr; // for blocking coup
+    int lastTaxAmount = 0; // NEW: Stores the amount of coins from the last tax action
     bool canBlockBribe = false;
     bool canBlockTax = false;
     bool canBlockCoup = false;
@@ -55,11 +57,11 @@ public:
     
     // Blocking methods
     void recordBribe(Player* player);
-    void recordTax(Player* player);
+    void recordTax(Player* player, int amount); // MODIFIED: Added amount
     void recordCoup(Player* player, Player* target);
     
     bool tryBlockBribe(Player* blocker);
-    bool tryBlockTax(Player* blocker);
+    bool tryBlockTax(Player* blocker); // No need for amount here, it's stored
     bool tryBlockCoup(Player* blocker);
     
     void clearBlockableActions(); // Called in nextTurn()
@@ -71,6 +73,21 @@ public:
     void giveExtraTurns(int turns = 2); // gives extra turns to the player who bribed
     bool hasExtraTurns() const { return extraTurnsRemaining > 0; }
     int getExtraTurnsRemaining() const { return extraTurnsRemaining; }
+
+    // For blocking mechanism
+    Player* _lastActionPerformer = nullptr;
+    std::string _lastActionType = "";
+    Player* _lastActionTarget = nullptr; // Useful for actions like Coup, Arrest, Sanction
+    
+    // Flags for blockable actions (can be used to quickly check if a block is possible)
+    bool canBlockBribeFlag = false; // Renamed to avoid confusion with method name
+    bool canBlockTaxFlag = false; // Assuming this exists for Governor
+    bool canBlockCoupFlag = false; // Assuming this exists for General
+
+    // Blocking related methods
+    void recordAction(Player* performer, const std::string& actionType, Player* target = nullptr);
+    void clearLastAction();
+    Player* tryBlock(const std::string& actionType, Player* performer, Player* target);
     
     // Get player roles information
     std::vector<std::pair<std::string, std::string>> getPlayersWithRoles() const;
@@ -80,7 +97,11 @@ public:
     Game& operator=(const Game&) = delete;
 
     // Get all players (add this method)
-    const std::vector<Player*>& getAllPlayers() const { return _players; }
+    const std::vector<Player*> getAllPlayers() const { return _players; }
+
+    
+    bool getCanBlockTax() const { return canBlockTax; }
+    int getLastTaxAmount() const { return lastTaxAmount; }
 };
 
-#endif // GAME_HPP
+#endif

@@ -1,3 +1,4 @@
+// Governor.cpp
 #include "Governor.hpp"
 #include "Player.hpp"
 #include "Game.hpp"
@@ -7,13 +8,12 @@
 Governor::Governor(const std::string& name) : Player(name) {
     // Constructor initializes the Governor with a name
 }
-void Governor::tax(Game& game) {
-        if (is_sanctioned) {
-            throw std::runtime_error(name + " is sanctioned and can't tax.");
-        }
-        else {
-            setCoins(3); // Governor can tax 3 coins
-        }
+// MODIFIED: This function now returns the amount of coins the tax *would* give, but does not add them.
+int Governor::tax(Game& game) { 
+    if (is_sanctioned) {
+        throw std::runtime_error(name + " is sanctioned and can't tax.");
+    }
+    return 3; // Governor taxes 3 coins
 }
 void Governor::blockTax(Game& game) {
     if (!isAlive()) {
@@ -27,4 +27,3 @@ std::string Governor::role() const {
 bool Governor::canBlockTax() const {
     return true; // Governor can block tax actions
 }
-
