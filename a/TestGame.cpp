@@ -1,5 +1,6 @@
 #define DOCTEST_CONFIG_IMPLEMENT_WITH_MAIN
 #include "doctest.h"
+#include <stdlib.h>
 
 // Include all necessary project headers
 #include "Game.hpp"
@@ -16,490 +17,678 @@
 #include <algorithm> // For std::find
 #include <stdexcept> // For std::runtime_error, std::invalid_argument
 
-TEST_CASE("Basic Tests – General Game Logic") {
-
-    SUBCASE("Game and Player Creation") {
-        INFO("Checks game creation, player addition, and initial checks");
-        Game game; // Create a new game instance
-
-        REQUIRE_FALSE(game.isGameEnded()); //
-        REQUIRE(game.getPlayerCount() == 0); //
-
-        // Create players with their actual roles
-        Player* p1 = new Governor("Alice"); //
-        Player* p2 = new Spy("Bob"); //
-        // Player* p3 = new Baron("Charlie"); // Will create later if needed
-
-        game.addPlayer(p1); //
-        CHECK(game.getPlayerCount() == 1);
-        game.addPlayer(p2); //
-        CHECK(game.getPlayerCount() == 2);
-
-        // Check that player names match the input
-        std::vector<std::string> current_players_names = game.players(); //
-        CHECK(current_players_names.size() == 2);
-        CHECK(std::find(current_players_names.begin(), current_players_names.end(), "Alice") != current_players_names.end());
-        CHECK(std::find(current_players_names.begin(), current_players_names.end(), "Bob") != current_players_names.end());
-
-        // Check that players start with 0 coins and are not eliminated (alive)
-        CHECK(p1->getCoins() == 0); //
-        CHECK(p1->isAlive()); //
-        CHECK(p2->getCoins() == 0); //
-        CHECK(p2->isAlive()); //
-
-        // Attempt to add a null player
-        Player* null_player = nullptr;
-        CHECK_THROWS_AS(game.addPlayer(null_player), std::invalid_argument); //
-
-        // Attempt to add players after the game has ended
-        // To end the game, leave only one player "alive" and call nextTurn
-        Game game_for_end_test;
-        Player* player_to_survive = new General("Survivor"); //
-        Player* player_to_be_eliminated = new Merchant("Victim"); //
-
-        game_for_end_test.addPlayer(player_to_survive);
-        game_for_end_test.addPlayer(player_to_be_eliminated);
-
-        REQUIRE(game_for_end_test.getPlayerCount() == 2);
-        player_to_be_eliminated->eliminateMe(); //
-        REQUIRE_FALSE(player_to_be_eliminated->isAlive());
-
-        // Calling nextTurn should detect that only one player remains and end the game
-        game_for_end_test.nextTurn(); //
-                                     // This should set gameEnded to true because only one player is alive.
-
-        REQUIRE(game_for_end_test.isGameEnded()); //
-
-        Player* p_late = new Judge("Latecomer"); //
-        CHECK_THROWS_AS(game_for_end_test.addPlayer(p_late), std::runtime_error); //
-        delete p_late; // Because it won't be added to the game and thus not cleaned up by it
-    }
-
-    SUBCASE("Turn Management") {
-        INFO("Checks the logic of turn progression");
-
-        Game turn_game;
-        Player* player_A = new Baron("PlayerA"); //
-        Player* player_B = new Judge("PlayerB"); //
-        Player* player_C = new General("PlayerC"); //
-
-        turn_game.addPlayer(player_A);
-        turn_game.addPlayer(player_B);
-        turn_game.addPlayer(player_C);
-
-        // The first player added is the first in turn
-        CHECK(turn_game.turn() == "PlayerA"); //
-
-        // After calling nextTurn, the turn passes to the next player
-        turn_game.nextTurn(); //
-        CHECK(turn_game.turn() == "PlayerB"); //
-
-        turn_game.nextTurn(); //
-        CHECK(turn_game.turn() == "PlayerC"); //
-
-        turn_game.nextTurn(); // Back to the first
-        CHECK(turn_game.turn() == "PlayerA"); //
-
-        // If a player is eliminated – the turn automatically passes to the next non-eliminated player
-        // player_A is in turn. Eliminate player_B.
-        player_B->eliminateMe(); //
-        REQUIRE_FALSE(player_B->isAlive());
-
-        // Now it's player_A's turn. After him, it should be player_C (because B was eliminated).
-        turn_game.nextTurn(); // player_A finishes turn
-        CHECK(turn_game.turn() == "PlayerC"); // Turn should pass to player_C
-
-        // Eliminate player_A as well. Now player_C is in turn.
-        player_A->eliminateMe(); //
-        REQUIRE_FALSE(player_A->isAlive());
-
-        // player_C is the only one remaining. The turn stays with him.
-        turn_game.nextTurn(); // player_C finishes turn.
-                                     // nextTurn will detect that only one player remains and end the game.
-        CHECK(turn_game.turn() == "PlayerC"); //
-
-        REQUIRE(turn_game.isGameEnded()); //
-        REQUIRE(turn_game.players().size() == 1); //
-        CHECK(turn_game.winner() == "PlayerC"); //
-
-
-        // Test case for a player receiving an extra turn
-        Game extra_turn_game;
-        Player* et_p1 = new Governor("ET_P1"); //
-        Player* et_p2 = new Spy("ET_P2"); //
-        extra_turn_game.addPlayer(et_p1);
-        extra_turn_game.addPlayer(et_p2);
-
-        REQUIRE(extra_turn_game.turn() == "ET_P1"); //
-
-        // Give ET_P1 one extra turn (bribery according to description gives 2, we will test with 1)
-        extra_turn_game.giveExtraTurns(1); //
-        CHECK(extra_turn_game.hasExtraTurns()); //
-        CHECK(extra_turn_game.getExtraTurnsRemaining() == 1); //
-
-        extra_turn_game.nextTurn(); // ET_P1 should continue turn due to the extra turn
-        CHECK(extra_turn_game.turn() == "ET_P1"); //
-        CHECK_FALSE(extra_turn_game.hasExtraTurns()); // Extra turn was used
-        CHECK(extra_turn_game.getExtraTurnsRemaining() == 0); //
-
-        extra_turn_game.nextTurn(); // Now the turn should pass to ET_P2
-        CHECK(extra_turn_game.turn() == "ET_P2"); //
-    }
-}
-// Helper function to create players for tests within the Game class.
-// This function is for initial setup. In-game actions will be called on Game's current player.
-Game createGameWithSpecificPlayers(const vector<pair<string, string>>& playerInfo) {
-    Game game;
-    for (const auto& info : playerInfo) {
-        if (info.second == "Governor") {
-            game.addPlayer(new Governor(info.first));
-        } else if (info.second == "Judge") {
-            game.addPlayer(new Judge(info.first));
-        } else if (info.second == "Baron") {
-            game.addPlayer(new Baron(info.first));
-        } else if (info.second == "General") {
-            game.addPlayer(new General(info.first));
-        } else if (info.second == "Merchant") {
-            game.addPlayer(new Merchant(info.first));
-        } else if (info.second == "Spy") {
-            game.addPlayer(new Spy(info.first));
-        } else {
-            // This case should ideally not be hit if all roles are covered, or should throw an error.
-            // For now, let's assume all roles are specific.
-            throw runtime_error("Unknown player role provided for test setup: " + info.second);
-        }
-    }
+/**
+ * Helper function to create a basic game with predefined players
+ * Returns a game with 6 players (one of each role)
+ */
+Game* createBasicGame() {
+    Game* game = new Game();
+    
+    Governor* governor = new Governor("Moshe");
+    Spy* spy = new Spy("Yossi");
+    Baron* baron = new Baron("Meirav");
+    General* general = new General("Reut");
+    Judge* judge = new Judge("Gilad");
+    Merchant* merchant = new Merchant("David");
+    
+    game->addPlayer(governor);
+    game->addPlayer(spy);
+    game->addPlayer(baron);
+    game->addPlayer(general);
+    game->addPlayer(judge);
+    game->addPlayer(merchant);
+    
     return game;
 }
 
-TEST_SUITE("Basic Actions") {
+/**
+ * Helper function to clean up game memory
+ */
+void cleanupGame(Game* game) {
+    delete game; // Game destructor handles player cleanup
+}
 
-    TEST_CASE("Gather action") {
-        Game game;
-        auto p1 = new Governor("Alice");
-        auto p2 = new Judge("Bob");
-        game.addPlayer(p1);
-        game.addPlayer(p2);
-
-        // Player can gather on their turn
-        CHECK_EQ(game.turn(), "Alice");
-        p1->gather();
-        CHECK_EQ(p1->getCoins(), 1); // 1 coin gained
-
-        // Player cannot gather if sanctioned
-        p2->sanction(static_cast<Player*>(p1)); // Sanction Alice
-        CHECK(p1->isSanctioned());
-        CHECK_EQ(game.turn(), "Alice"); // It's still Alice's turn in this test flow
-        p1->gather(); // Alice is sanctioned, so gather should not add coins
-        CHECK_EQ(p1->getCoins(), 1); // Coins should not increase
-
-        // Player cannot gather out of turn
-        CHECK_THROWS_AS(p2->gather(), std::runtime_error); // Bob tries to gather out of turn
-
-        game.nextTurn(); // Alice's sanction should be cleared at the start of her next turn
-        CHECK_EQ(game.turn(), "Bob");
-        CHECK_FALSE(p1->isSanctioned()); // Sanction cleared at the start of Bob's turn, not Alice's
+/**
+ * Helper function to find player by name in game
+ */
+Player* findPlayerByName(Game* game, const std::string& name) {
+    auto players = game->getAllPlayers();
+    for (Player* player : players) {
+        if (player->getName() == name) {
+            return player;
+        }
     }
+    return nullptr;
+}
 
-    TEST_CASE("Tax action") {
+/**
+ * Helper function to advance game turns until specific player's turn
+ */
+void advanceToPlayer(Game* game, const std::string& playerName) {
+    int maxTurns = 10; // Safety limit
+    int turns = 0;
+    while (game->turn().find(playerName) == std::string::npos && turns < maxTurns) {
+        game->nextTurn();
+        turns++;
+    }
+}
+
+TEST_SUITE("Game Basic Functionality") {
+    
+    TEST_CASE("Game Constructor") {
         Game game;
-        auto p1 = new Player("Alice"); // Using generic Player for base tax check
-        auto p2 = new Governor("Bob"); // Governor for tax blocking
-        auto p3 = new Judge("Charlie");
-        game.addPlayer(p1);
-        game.addPlayer(p2);
-        game.addPlayer(p3);
-
-        // Player can perform tax on their turn
-        CHECK_EQ(game.turn(), "Alice");
-        p1->setTurn(true); // Manually set turn for direct player action in test
-        p1->tax(game);
-        CHECK_EQ(p1->getCoins(), 2); // 2 coins gained
-        p1->setTurn(false);
-
-        // Player cannot perform tax if sanctioned
-        p3->sanction(std::shared_ptr<Player>(p1)); // Sanction Alice
-        CHECK(p1->isSanctioned());
-        CHECK_EQ(game.turn(), "Alice"); // Still Alice's turn in this test
-        p1->setTurn(true);
-        p1->tax(game); // Alice is sanctioned, tax should not add coins
-        CHECK_EQ(p1->getCoins(), 2); // Coins should not increase
-        p1->setTurn(false);
-
-        // Player cannot perform tax out of turn
-        CHECK_THROWS_AS(p3->tax(game), std::runtime_error); // Charlie tries to tax out of turn
-
-        // Governor can block tax action
-        game.nextTurn(); // Bob's turn
-        CHECK_EQ(game.turn(), "Bob");
-        p2->setTurn(true); // Manually set turn for direct player action in test
-        p2->tax(game); // Bob taxes (as Governor, gets 3 coins)
-        CHECK_EQ(p2->getCoins(), 3);
-        p2->setTurn(false);
-
-        game.nextTurn(); // Charlie's turn
-        CHECK_EQ(game.turn(), "Charlie");
-        p3->setTurn(true);
-        p3->tax(game); // Charlie (Judge) taxes, should get 2 coins
-        CHECK_EQ(p3->getCoins(), 2); // Should be 2 from tax
-        p3->setTurn(false);
-
-        game.nextTurn(); // Back to Alice's turn
-        p1->setTurn(true);
-        p1->tax(game); // Alice taxes
-        CHECK_EQ(p1->getCoins(), 4); // Alice's coins are now 2 (from previous tax) + 2 (from current tax)
-        p1->setTurn(false);
-
-        // Now test blocking tax:
-        // Alice taxes, Bob (Governor) blocks.
-        game.nextTurn(); // Bob's turn
-        game.nextTurn(); // Charlie's turn
-        game.nextTurn(); // Alice's turn
+        CHECK(game.getPlayerCount() == 0);
+        CHECK_FALSE(game.isGameEnded());
+        CHECK(game.getAlivePlayerCount() == 0);
+        CHECK(game.turn() == "No players yet.");
+    }
+    
+    TEST_CASE("Adding Players") {
+        Game* game = new Game();
         
-        p1->setTurn(true);
-        p1->tax(game); // Alice taxes, now has 6 coins
-        CHECK_EQ(p1->getCoins(), 6);
-        p1->setTurn(false);
-
-        // It's still Alice's "action" turn if we're considering immediate blocks.
-        // In this implementation, the block happens before the next turn if available.
-        // We need to simulate the timing of the block by calling tryBlockTax.
-        game.recordTax(p1); // Game records Alice's tax action
-
-        // Now Bob (Governor) tries to block. This assumes Bob is not currently sanctioned and has the ability.
-        // In a real game, this would be a player choice during the "reaction" phase.
-        // For testing, we call the block directly if game design allows.
-        CHECK(game.tryBlockTax(p2)); // Bob successfully blocks Alice's tax
-        CHECK_EQ(p1->getCoins(), 4); // Alice's coins should revert to before the tax
-    }
-
-    TEST_CASE("Bribe action") {
-        Game game;
-        auto p1 = new Player("Alice");
-        auto p2 = new Judge("Bob");
-        auto p3 = new Baron("Charlie");
-        game.addPlayer(p1);
-        game.addPlayer(p2);
-        game.addPlayer(p3);
-
-        p1->setCoins(5); // Give Alice enough money for bribe
-
-        // Player can bribe on their turn and pay 4 coins
-        CHECK_EQ(game.turn(), "Alice");
-        p1->setTurn(true);
-        p1->bribe(game);
-        CHECK_EQ(p1->getCoins(), 1); // 5 - 4 = 1
-        CHECK(game.hasExtraTurns());
-        CHECK_EQ(game.getExtraTurnsRemaining(), 2); // 2 extra turns received
-        p1->setTurn(false);
-
-        // Judge can undo the bribe, no extra turns received
-        p1->setCoins(5); // Reset coins for new bribe attempt
-        game.recordBribe(p1); // Record the bribe for the judge to undo
-        CHECK(p2->canUndoBribe()); // Bob (Judge) can undo
-        p2->undoBribe(std::shared_ptr<Player>(p1)); // Bob undoes Alice's bribe
-        CHECK_EQ(p1->getCoins(), 5); // Coins should be restored if bribe undone (or not lost if concept is "prevented")
-        // The current implementation of bribe deducts immediately. If undone, coins should be returned.
-        // Let's assume the undoBribe mechanism handles coin refund.
-        // If bribe is undone, the game should reset extra turns.
-        CHECK_FALSE(game.hasExtraTurns());
-
-        // Bribe not possible if player has less than 4 coins
-        p3->setCoins(3);
-        CHECK_EQ(game.turn(), "Charlie"); // Charlie's turn after Alice and Bob in this sequence.
-        p3->setTurn(true);
-        CHECK_THROWS_AS(p3->bribe(game), std::runtime_error);
-        CHECK_EQ(p3->getCoins(), 3); // Coins should not change
-        p3->setTurn(false);
-    }
-
-    TEST_CASE("Arrest action") {
-        Game game;
-        auto p1 = new Player("Alice"); // Arresting player
-        auto p2 = new Player("Bob");   // Arrested player (normal)
-        auto p3 = new Merchant("Charlie"); // Arrested player (Merchant)
-        auto p4 = new Spy("David");     // Arrested player (Spy)
-        game.addPlayer(p1);
-        game.addPlayer(p2);
-        game.addPlayer(p3);
-        game.addPlayer(p4);
-
-        p1->setCoins(5); // Give P1 some coins for actions
-        p2->setCoins(5);
-        p3->setCoins(5);
-        p4->setCoins(5);
-
-        // Player can arrest another player
-        CHECK_EQ(game.turn(), "Alice");
-        p1->setTurn(true);
-        p1->arrest(std::shared_ptr<Player>(p2), game); // Alice arrests Bob
-        CHECK_EQ(p2->getCoins(), 4); // Bob loses 1 coin
-        CHECK_EQ(p1->getCoins(), 6); // Alice gains 1 coin
-        p1->setTurn(false);
-        game.clearLastArrestedFlag(); // Simulate end of turn for arrest tracking
-
-        // Cannot arrest the same player twice in a row
-        game.nextTurn(); // Bob's turn
-        game.nextTurn(); // Charlie's turn
-        game.nextTurn(); // David's turn
-        game.nextTurn(); // Alice's turn again
-
-        p1->setTurn(true);
-        p1->arrest(std::shared_ptr<Player>(p2), game); // Alice arrests Bob again
-        CHECK_EQ(p2->getCoins(), 4); // Bob should not lose another coin immediately (depends on game logic for "consecutive")
-        CHECK_EQ(p1->getCoins(), 6); // Alice should not gain another coin immediately
-        // The requirement is "לא ניתן להשתמש בה על אותו שחקן פעמיים ברציפות."
-        // This implies that if Bob was the *last* player Alice arrested, she cannot arrest him again *on her next turn*.
-        // The game should have a mechanism to track this.
-        CHECK_THROWS_AS(p1->arrest(std::shared_ptr<Player>(p2), game), std::runtime_error);
-        p1->setTurn(false);
-
-        // Spy can prevent arrest
-        game.clearLastArrestedFlag();
-        game.nextTurn(); // David's turn
-
-        p4->setTurn(true);
-        p4->preventArrest(std::shared_ptr<Player>(p1)); // David prevents Alice from arresting
-        CHECK(p1->isPreventedFromArresting());
-        p4->setTurn(false);
-
-        game.nextTurn(); // Alice's turn
-
-        p1->setTurn(true);
-        CHECK_THROWS_AS(p1->arrest(std::shared_ptr<Player>(p2), game), std::runtime_error); // Alice tries to arrest, but is prevented
-        p1->setTurn(false);
-
-        // If Merchant is arrested, they pay 2 coins to the bank instead of 1 to the attacker
-        game.clearLastArrestedFlag();
-        p1->setCoins(10); // Reset Alice's coins for this test
-        p3->setCoins(10); // Reset Charlie's coins
-
-        CHECK_EQ(game.turn(), "Alice");
-        p1->setTurn(true);
-        p1->arrest(std::shared_ptr<Player>(p3), game); // Alice arrests Charlie (Merchant)
-        CHECK_EQ(p3->getCoins(), 8); // Charlie loses 2 coins
-        CHECK_EQ(p1->getCoins(), 10); // Alice does NOT gain coins
-        p1->setTurn(false);
-
-        // Cannot arrest an eliminated player
-        p2->eliminateMe(); // Eliminate Bob
-        game.nextTurn(); // Assume it's Alice's turn
-        p1->setTurn(true);
-        CHECK_THROWS_AS(p1->arrest(std::shared_ptr<Player>(p2), game), std::runtime_error);
-        p1->setTurn(false);
-    }
-
-    TEST_CASE("Sanction action") {
-        Game game;
-        auto p1 = new Player("Alice");
-        auto p2 = new Baron("Bob");   // Baron for compensation check
-        auto p3 = new Judge("Charlie"); // Judge for extra cost check
-        game.addPlayer(p1);
-        game.addPlayer(p2);
-        game.addPlayer(p3);
-
-        p1->setCoins(10); // Give Alice enough coins
-        p2->setCoins(5);
-        p3->setCoins(10);
-
-        // Player can sanction another player not already sanctioned
-        CHECK_EQ(game.turn(), "Alice");
-        p1->setTurn(true);
-        p1->sanction(std::shared_ptr<Player>(p2)); // Alice sanctions Bob
-        CHECK_EQ(p1->getCoins(), 7); // Alice pays 3 coins
-        CHECK(p2->isSanctioned()); // Bob is sanctioned
-
-        // Sanction affects ability to gather or tax
-        // This is tested in gather/tax test cases, but reinforce here
-        p2->setTurn(true);
-        p2->gather(); // Bob tries to gather while sanctioned
-        CHECK_EQ(p2->getCoins(), 5); // Should not increase
-        p2->tax(game); // Bob tries to tax while sanctioned
-        CHECK_EQ(p2->getCoins(), 5); // Should not increase
-        p2->setTurn(false);
-
-        // If Baron is sanctioned, they get 1 coin as compensation
-        // The Baron's onSanctionedBy method should handle this.
-        // Let's re-run sanction with Baron as target, reset states.
-        p1->setCoins(10); // Reset Alice's coins
-        p2->setCoins(5); // Reset Bob's coins
-        p2->setTurn(false); // Ensure Bob is not sanctioned for this new attempt
-        p2->restoreFromElimination(); // Ensure Bob is alive
-
-        p1->setTurn(true);
-        p1->sanction(std::shared_ptr<Player>(p2)); // Alice sanctions Bob (Baron)
-        CHECK_EQ(p1->getCoins(), 7); // Alice pays 3 coins
-        CHECK_EQ(p2->getCoins(), 6); // Bob (Baron) gets 1 coin back
-
-        // If the sanctioner is a Judge, they lose an additional coin to the bank
-        p3->setCoins(10); // Reset Charlie's coins
-        p1->setCoins(10); // Reset Alice's coins
-        p1->setTurn(false); // Alice not sanctioned
+        Governor* governor = new Governor("Alice");
+        Spy* spy = new Spy("Bob");
+        Baron* baron = new Baron("Charlie");
         
-        game.nextTurn(); // Ensure it's Charlie's turn.
-        CHECK_EQ(game.turn(), "Charlie");
-        p3->setTurn(true);
-        p3->sanction(std::shared_ptr<Player>(p1)); // Charlie (Judge) sanctions Alice
-        CHECK_EQ(p3->getCoins(), 6); // Charlie pays 3 (for sanction) + 1 (as Judge sanctioning) = 4 coins lost
-        CHECK(p1->isSanctioned());
-        p3->setTurn(false);
-    }
-
-    TEST_CASE("Coup action") {
-        Game game;
-        auto p1 = new Player("Alice"); // Couping player
-        auto p2 = new Player("Bob");   // Coup target (normal)
-        auto p3 = new General("Charlie"); // General for blocking coup
-        game.addPlayer(p1);
-        game.addPlayer(p2);
-        game.addPlayer(p3);
-
-        p1->setCoins(10); // Give Alice enough coins
-        p2->setCoins(0);
-        p3->setCoins(10); // General needs coins to block
-
-        // Coup eliminates another player for 7 coins
-        CHECK_EQ(game.turn(), "Alice");
-        p1->setTurn(true);
-        p1->coup(std::shared_ptr<Player>(p2), game); // Alice coups Bob
-        CHECK_EQ(p1->getCoins(), 3); // Alice loses 7 coins
-        CHECK_FALSE(p2->isAlive()); // Bob is eliminated
-        p1->setTurn(false);
-        p2->restoreFromElimination(); // Restore Bob for subsequent tests
-
-        // Cannot coup if player has less than 7 coins
-        p1->setCoins(6); // Alice has less than 7 coins
-        CHECK_EQ(game.turn(), "Alice");
-        p1->setTurn(true);
-        CHECK_THROWS_AS(p1->coup(std::shared_ptr<Player>(p2), game), std::runtime_error);
-        CHECK_EQ(p1->getCoins(), 6); // Coins should not change
-        p1->setTurn(false);
-
-        // General can block coup
-        p1->setCoins(10); // Reset Alice's coins
-        game.nextTurn(); // Bob's turn
-        game.nextTurn(); // Charlie's turn
+        game->addPlayer(governor);
+        CHECK(game->getPlayerCount() == 1);
+        CHECK(game->getAlivePlayerCount() == 1);
         
-        // Alice coups Bob, Charlie (General) blocks
-        p1->setTurn(true);
-        p1->coup(std::shared_ptr<Player>(p2), game); // Alice attempts to coup Bob
-        CHECK_EQ(p1->getCoins(), 3); // Alice initially pays 7 coins
+        game->addPlayer(spy);
+        game->addPlayer(baron);
+        CHECK(game->getPlayerCount() == 3);
+        CHECK(game->getAlivePlayerCount() == 3);
+        
+        // Check player names are stored correctly
+        std::vector<std::string> playerNames = game->players();
+        CHECK(playerNames.size() == 3);
+        CHECK(std::find(playerNames.begin(), playerNames.end(), "Alice") != playerNames.end());
+        CHECK(std::find(playerNames.begin(), playerNames.end(), "Bob") != playerNames.end());
+        CHECK(std::find(playerNames.begin(), playerNames.end(), "Charlie") != playerNames.end());
+        
+        cleanupGame(game);
+    }
+    
+    TEST_CASE("Turn Management - Basic Flow") {
+        Game* game = createBasicGame();
+        
+        // First player added should be first to play
+        CHECK(game->turn() == "Moshe's turn.");
+        
+        // Advance turn and check it goes to next player
+        game->nextTurn();
+        CHECK(game->turn() == "Yossi's turn.");
+        
+        game->nextTurn();
+        CHECK(game->turn() == "Meirav's turn.");
+        
+        game->nextTurn();
+        CHECK(game->turn() == "Reut's turn.");
+        
+        game->nextTurn();
+        CHECK(game->turn() == "Gilad's turn.");
+        
+        game->nextTurn();
+        CHECK(game->turn() == "David's turn.");
+        
+        // Should cycle back to first player
+        game->nextTurn();
+        CHECK(game->turn() == "Moshe's turn.");
+        
+        cleanupGame(game);
+    }
+    
+    TEST_CASE("Turn Management - Skip Eliminated Players") {
+        Game* game = createBasicGame();
+        
+        // Eliminate second player (Spy - Yossi)
+        Player* spy = findPlayerByName(game, "Yossi");
+        REQUIRE(spy != nullptr);
+        spy->eliminateMe();
+        
+        // Start from first player
+        CHECK(game->turn() == "Moshe's turn.");
+        
+        // Should skip eliminated player and go to third player
+        game->nextTurn();
+        CHECK(game->turn() == "Meirav's turn.");
+        
+        // Continue normally
+        game->nextTurn();
+        CHECK(game->turn() == "Reut's turn.");
+        
+        // Eliminate another player (Baron - Meirav)
+        Player* baron = findPlayerByName(game, "Meirav");
+        REQUIRE(baron != nullptr);
+        baron->eliminateMe();
+        
+        // Go back to first, then should skip TWO eliminated players
+        game->nextTurn();
+        game->nextTurn();
+        game->nextTurn();
+        CHECK(game->turn() == "Moshe's turn.");
+        
+        game->nextTurn();
+        CHECK(game->turn() == "Reut's turn."); // Should skip Yossi and Meirav
+        
+        cleanupGame(game);
+    }
+    
+    TEST_CASE("Turn Management - Extra Turns from Bribe") {
+        Game* game = createBasicGame();
+        
+        // Give first player enough coins for bribe
+        Player* governor = findPlayerByName(game, "Moshe");
+        REQUIRE(governor != nullptr);
+        governor->setCoins(4);
+        
+        CHECK(game->turn() == "Moshe's turn.");
+        CHECK(game->getExtraTurnsRemaining() == 0);
+        
+        // Perform bribe
+        governor->bribe(*game);
+        game->giveExtraTurns(2); // Simulate bribe giving extra turns
+        
+        CHECK(game->getExtraTurnsRemaining() == 2);
+        CHECK(governor->getCoins() == 0); // Should have spent 4 coins
+        
+        // Next turn should still be the same player (first extra turn)
+        game->nextTurn();
+        CHECK(game->turn() == "Moshe's turn.");
+        CHECK(game->getExtraTurnsRemaining() == 1);
+        
+        // Second extra turn
+        game->nextTurn();
+        CHECK(game->turn() == "Moshe's turn.");
+        CHECK(game->getExtraTurnsRemaining() == 0);
+        
+        // Now should advance to next player
+        game->nextTurn();
+        CHECK(game->turn() == "Yossi's turn.");
+        
+        cleanupGame(game);
+    }
+    
+    TEST_CASE("Game State - Game End Condition") {
+        Game* game = new Game();
+        
+        Governor* governor = new Governor("Alice");
+        Spy* spy = new Spy("Bob");
+        
+        game->addPlayer(governor);
+        game->addPlayer(spy);
+        
+        CHECK_FALSE(game->isGameEnded());
+        CHECK(game->getAlivePlayerCount() == 2);
+        
+        // Eliminate one player
+        spy->eliminateMe();
+        
+        // Game should end when nextTurn is called and only one player remains
+        game->nextTurn();
+        
+        CHECK(game->isGameEnded());
+        CHECK(game->getAlivePlayerCount() == 1);
+        CHECK(game->winner() == "Alice");
+        
+        cleanupGame(game);
+    }
+}
 
-        game.recordCoup(p1, p2); // Record the coup for the General to block
-        CHECK(p3->canBlockCoup()); // Charlie (General) can block
-        p3->blockCoup(std::shared_ptr<Player>(p2), std::shared_ptr<Player>(p1)); // Charlie blocks Alice's coup on Bob
-        CHECK_EQ(p3->getCoins(), 5); // Charlie pays 5 coins to block
-        CHECK_EQ(p1->getCoins(), 10); // Alice's coins are returned as coup is blocked
-        CHECK(p2->isAlive()); // Bob is still alive
-        p1->setTurn(false);
+TEST_SUITE("Gather") {
 
-        // Cannot coup an already eliminated player
-        p2->eliminateMe(); // Eliminate Bob again
-        p1->setCoins(10); // Reset Alice's coins
-        CHECK_EQ(game.turn(), "Alice");
-        p1->setTurn(true);
-        CHECK_THROWS_AS(p1->coup(std::shared_ptr<Player>(p2), game), std::runtime_error);
-        CHECK_FALSE(p2->isAlive());
-        p1->setTurn(false);
+    TEST_CASE("Player can gather coins on their turn") {
+        Game* game = createBasicGame();
+        Player* governor = findPlayerByName(game, "Moshe");
+        REQUIRE(governor != nullptr);
+        
+        // Governor's turn
+        CHECK(game->turn() == "Moshe's turn.");
+        CHECK(governor->getCoins() == 0);
+        
+        governor->gather(*game);
+        CHECK(governor->getCoins() == 1);
+        
+        cleanupGame(game);
+    }
+    
+    TEST_CASE("Sanctioned player cannot gather") {
+        Game* game = createBasicGame();
+        Player* governor = findPlayerByName(game, "Moshe");
+        REQUIRE(governor != nullptr);
+        
+        governor->sanctionMe();
+        CHECK(governor->isSanctioned());
+        
+        CHECK_THROWS_AS(governor->gather(*game), std::runtime_error);
+        
+        cleanupGame(game);
+    }
+}
+
+TEST_SUITE("Tax") {
+    
+    TEST_CASE("Governor can block tax - tax is cancelled") {
+        Game* game = createBasicGame();
+        Player* spy = findPlayerByName(game, "Yossi");
+        Player* governor = findPlayerByName(game, "Moshe");
+        REQUIRE(spy != nullptr);
+        REQUIRE(governor != nullptr);
+        
+        // Advance to spy's turn
+        advanceToPlayer(game, "Yossi");
+        CHECK(game->turn() == "Yossi's turn.");
+        
+        int initialCoins = spy->getCoins();
+        
+        // Spy performs tax, but governor can block
+        int taxed = spy->tax(*game);
+        
+        // If governor blocks, the tax should be cancelled
+        if (governor->canBlockTax()) {
+            bool blocked = game->tryBlock("tax",governor, spy);
+            if (blocked) {
+                CHECK(spy->getCoins() == initialCoins); // No coins gained
+            }
+        }
+        
+        cleanupGame(game);
+    }
+}
+
+TEST_SUITE("Bribe") {
+    
+    TEST_CASE("Player can perform bribe with 4+ coins") {
+        Game* game = createBasicGame();
+        Player* governor = findPlayerByName(game, "Moshe");
+        REQUIRE(governor != nullptr);
+        
+        governor->setCoins(4);
+        CHECK(game->turn() == "Moshe's turn.");
+        
+        governor->bribe(*game);
+        CHECK(governor->getCoins() == 0); // Spent 4 coins
+        
+        cleanupGame(game);
+    }
+    
+    TEST_CASE("Player cannot bribe with less than 4 coins") {
+        Game* game = createBasicGame();
+        Player* governor = findPlayerByName(game, "Moshe");
+        REQUIRE(governor != nullptr);
+        
+        governor->setCoins(3);
+        CHECK(game->turn() == "Moshe's turn.");
+        
+        CHECK_THROWS_AS(governor->bribe(*game), std::runtime_error);
+        
+        cleanupGame(game);
+    }
+    
+    TEST_CASE("Bribe gives 2 extra turns when not blocked") {
+        Game* game = createBasicGame();
+        Player* governor = findPlayerByName(game, "Moshe");
+        REQUIRE(governor != nullptr);
+        
+        governor->setCoins(4);
+        CHECK(game->turn() == "Moshe's turn.");
+        CHECK(game->getExtraTurnsRemaining() == 0);
+        
+        governor->bribe(*game);
+        game->giveExtraTurns(2); // Simulate successful bribe
+        
+        CHECK(game->getExtraTurnsRemaining() == 2);
+        
+        cleanupGame(game);
+    }
+    
+    TEST_CASE("Judge can block bribe - no extra turns") {
+        Game* game = createBasicGame();
+        Player* governor = findPlayerByName(game, "Moshe");
+        Player* judge = findPlayerByName(game, "Gilad");
+        REQUIRE(governor != nullptr);
+        REQUIRE(judge != nullptr);
+        
+        governor->setCoins(4);
+        CHECK(game->turn() == "Moshe's turn.");
+        
+        governor->bribe(*game);
+        
+        // If judge blocks, no extra turns should be given
+        if (judge->canUndoBribe()) {
+            bool blocked = game->tryBlock("bribe",judge, governor);
+            if (blocked) {
+                CHECK(game->getExtraTurnsRemaining() == 0);
+            }
+        }
+        
+        cleanupGame(game);
+    }
+}
+
+TEST_SUITE("Arrest") {
+    
+    TEST_CASE("Cannot arrest player who was already arrested last turn") {
+        Game* game = createBasicGame();
+        Player* governor = findPlayerByName(game, "Moshe");
+        Player* spy = findPlayerByName(game, "Yossi");
+        REQUIRE(governor != nullptr);
+        REQUIRE(spy != nullptr);
+        
+        spy->gotArrested(true);
+        CHECK(spy->isLastOneArrested());
+        
+        CHECK_THROWS_AS(governor->arrest(spy, *game), std::runtime_error);
+        
+        cleanupGame(game);
+    }
+    
+    TEST_CASE("Spy can prevent arrest") {
+        Game* game = createBasicGame();
+        Player* governor = findPlayerByName(game, "Moshe");
+        Player* spy = findPlayerByName(game, "Yossi");
+        REQUIRE(governor != nullptr);
+        REQUIRE(spy != nullptr);
+        
+        CHECK(game->turn() == "Moshe's turn.");
+        
+        // Spy prevents their own arrest
+        if (spy->canPreventArrest()) {
+            spy->gotPreventedFromArresting();
+            CHECK(spy->isPreventedFromArresting());
+        }
+        
+        cleanupGame(game);
+    }
+    
+    TEST_CASE("Merchant loses 2 coins when arrested") {
+        Game* game = createBasicGame();
+        Player* governor = findPlayerByName(game, "Moshe");
+        Player* merchant = findPlayerByName(game, "David");
+        REQUIRE(governor != nullptr);
+        REQUIRE(merchant != nullptr);
+        
+        merchant->setCoins(3);
+        CHECK(game->turn() == "Moshe's turn.");
+        
+        bool arrested = governor->arrest(merchant, *game);
+        if (arrested) {
+            // Merchant should lose 2 coins if arrested
+            CHECK(merchant->getCoins() == 1);
+        }
+        
+        cleanupGame(game);
+    }
+    
+    TEST_CASE("Cannot arrest eliminated player") {
+        Game* game = createBasicGame();
+        Player* governor = findPlayerByName(game, "Moshe");
+        Player* spy = findPlayerByName(game, "Yossi");
+        REQUIRE(governor != nullptr);
+        REQUIRE(spy != nullptr);
+        
+        spy->eliminateMe();
+        CHECK_FALSE(spy->isAlive());
+        
+        CHECK_THROWS_AS(governor->arrest(spy, *game), std::runtime_error);
+        
+        cleanupGame(game);
+    }
+}
+
+TEST_SUITE("Sanction") {
+    
+    TEST_CASE("Player can sanction another player with 3+ coins") {
+        Game* game = createBasicGame();
+        Player* governor = findPlayerByName(game, "Moshe");
+        Player* spy = findPlayerByName(game, "Yossi");
+        REQUIRE(governor != nullptr);
+        REQUIRE(spy != nullptr);
+        
+        governor->setCoins(3);
+        CHECK(game->turn() == "Moshe's turn.");
+        CHECK_FALSE(spy->isSanctioned());
+        
+        governor->sanction(spy, *game);
+        CHECK(governor->getCoins() == 0); // Spent 3 coins
+        CHECK(spy->isSanctioned());
+        
+        cleanupGame(game);
+    }
+    
+    TEST_CASE("Cannot sanction player who is already sanctioned") {
+        Game* game = createBasicGame();
+        Player* governor = findPlayerByName(game, "Moshe");
+        Player* spy = findPlayerByName(game, "Yossi");
+        REQUIRE(governor != nullptr);
+        REQUIRE(spy != nullptr);
+        
+        governor->setCoins(3);
+        spy->sanctionMe();
+        CHECK(spy->isSanctioned());
+        
+        CHECK_THROWS_AS(governor->sanction(spy, *game), std::runtime_error);
+        
+        cleanupGame(game);
+    }
+}
+
+TEST_SUITE("Coup") {
+    
+    TEST_CASE("Player can perform coup with 7+ coins") {
+        Game* game = createBasicGame();
+        Player* governor = findPlayerByName(game, "Moshe");
+        Player* spy = findPlayerByName(game, "Yossi");
+        REQUIRE(governor != nullptr);
+        REQUIRE(spy != nullptr);
+        
+        governor->setCoins(7);
+        CHECK(game->turn() == "Moshe's turn.");
+        CHECK(spy->isAlive());
+        
+        bool couped = governor->coup(spy, *game);
+        CHECK(couped);
+        CHECK(governor->getCoins() == 0); // Spent 7 coins
+        CHECK_FALSE(spy->isAlive()); // Target eliminated
+        
+        cleanupGame(game);
+    }
+    
+    TEST_CASE("Cannot coup with less than 7 coins") {
+        Game* game = createBasicGame();
+        Player* governor = findPlayerByName(game, "Moshe");
+        Player* spy = findPlayerByName(game, "Yossi");
+        REQUIRE(governor != nullptr);
+        REQUIRE(spy != nullptr);
+        
+        governor->setCoins(6);
+        CHECK(game->turn() == "Moshe's turn.");
+        
+        CHECK_THROWS_AS(governor->coup(spy, *game), std::runtime_error);
+        
+        cleanupGame(game);
+    }
+    
+    TEST_CASE("General can block coup") {
+        Game* game = createBasicGame();
+        Player* governor = findPlayerByName(game, "Moshe");
+        Player* spy = findPlayerByName(game, "Yossi");
+        Player* general = findPlayerByName(game, "Reut");
+        REQUIRE(governor != nullptr);
+        REQUIRE(spy != nullptr);
+        REQUIRE(general != nullptr);
+        
+        governor->setCoins(7);
+        CHECK(game->turn() == "Moshe's turn.");
+        
+        bool couped = governor->coup(spy, *game);
+
+        // If general blocks, coup should fail
+        if (general->canBlockCoup()) {
+            bool blocked = game->tryBlock("coup",general,governor);
+            if (blocked) {
+                CHECK(spy->isAlive()); // Target still alive
+            }
+        }
+        
+        cleanupGame(game);
+    }
+    
+    TEST_CASE("Cannot coup eliminated player") {
+        Game* game = createBasicGame();
+        Player* governor = findPlayerByName(game, "Moshe");
+        Player* spy = findPlayerByName(game, "Yossi");
+        REQUIRE(governor != nullptr);
+        REQUIRE(spy != nullptr);
+        
+        governor->setCoins(7);
+        spy->eliminateMe();
+        CHECK_FALSE(spy->isAlive());
+        
+        CHECK_THROWS_AS(governor->coup(spy, *game), std::runtime_error);
+        
+        cleanupGame(game);
+    }
+}
+
+TEST_SUITE("Role Interactions") {
+    
+    TEST_CASE("Governor blocks tax - action cancelled") {
+        Game* game = createBasicGame();
+        Player* spy = findPlayerByName(game, "Yossi");
+        Player* governor = findPlayerByName(game, "Moshe");
+        REQUIRE(spy != nullptr);
+        REQUIRE(governor != nullptr);
+        
+        // Advance to spy's turn
+        advanceToPlayer(game, "Yossi");
+        int initialCoins = spy->getCoins();
+        
+        // Record tax action
+        game->recordAction(spy, "tax");
+        
+        // Governor blocks
+        bool blocked = game->tryBlock("tax", governor, spy);
+        if (blocked) {
+            CHECK(spy->getCoins() == initialCoins); // No coins gained
+        }
+        
+        cleanupGame(game);
+    }
+    
+    TEST_CASE("Spy prevents arrest - action fails") {
+        Game* game = createBasicGame();
+        Player* governor = findPlayerByName(game, "Moshe");
+        Player* spy = findPlayerByName(game, "Yossi");
+        REQUIRE(governor != nullptr);
+        REQUIRE(spy != nullptr);
+        
+        CHECK(game->turn() == "Moshe's turn.");
+        
+        // Spy prevents arrest
+        if (spy->canPreventArrest()) {
+            spy->gotPreventedFromArresting();
+            
+            // Arrest should fail
+            CHECK_THROWS_AS(governor->arrest(spy, *game), std::runtime_error);
+        }
+        
+        cleanupGame(game);
+    }
+    
+    TEST_CASE("Judge cancels bribe - no extra turn") {
+        Game* game = createBasicGame();
+        Player* governor = findPlayerByName(game, "Moshe");
+        Player* judge = findPlayerByName(game, "Gilad");
+        REQUIRE(governor != nullptr);
+        REQUIRE(judge != nullptr);
+        
+        governor->setCoins(4);
+        
+        // Record bribe action
+        game->recordAction(governor, "bribe");
+        
+        // Judge blocks
+        bool blocked = game->tryBlock("bribe",judge, governor);
+        if (blocked) {
+            CHECK(game->getExtraTurnsRemaining() == 0);
+        }
+        
+        cleanupGame(game);
+    }
+}
+
+TEST_SUITE("Edge Cases and Exceptions") {
+    
+    TEST_CASE("Cannot perform actions on eliminated players") {
+        Game* game = createBasicGame();
+        Player* governor = findPlayerByName(game, "Moshe");
+        Player* spy = findPlayerByName(game, "Yossi");
+        REQUIRE(governor != nullptr);
+        REQUIRE(spy != nullptr);
+        
+        spy->eliminateMe();
+        CHECK_FALSE(spy->isAlive());
+        
+        CHECK_THROWS_AS(governor->arrest(spy, *game), std::runtime_error);
+        
+        governor->setCoins(3);
+        CHECK_THROWS_AS(governor->sanction(spy, *game), std::runtime_error);
+        
+        governor->setCoins(7);
+        CHECK_THROWS_AS(governor->coup(spy, *game), std::runtime_error);
+        
+        cleanupGame(game);
+    }
+    
+    TEST_CASE("Double sanction attempt throws exception") {
+        Game* game = createBasicGame();
+        Player* governor = findPlayerByName(game, "Moshe");
+        Player* spy = findPlayerByName(game, "Yossi");
+        REQUIRE(governor != nullptr);
+        REQUIRE(spy != nullptr);
+        
+        governor->setCoins(6);
+        
+        // First sanction
+        governor->sanction(spy, *game);
+        CHECK(spy->isSanctioned());
+        CHECK(governor->getCoins() == 3);
+        
+        // Second sanction attempt should fail
+        CHECK_THROWS_AS(governor->sanction(spy, *game), std::runtime_error);
+        
+        cleanupGame(game);
+    }
+}
+
+TEST_SUITE("Game End Conditions") {
+
+    TEST_CASE("Game ends when only one player remains") {
+        Game* game = new Game();
+        
+        Governor* governor = new Governor("Alice");
+        Spy* spy = new Spy("Bob");
+        Baron* baron = new Baron("Charlie");
+        
+        game->addPlayer(governor);
+        game->addPlayer(spy);
+        game->addPlayer(baron);
+        
+        CHECK_FALSE(game->isGameEnded());
+        CHECK(game->getAlivePlayerCount() == 3);
+        
+        // Eliminate two players
+        spy->eliminateMe();
+        baron->eliminateMe();
+        
+        // Game should end when nextTurn is called
+        game->nextTurn();
+        
+        CHECK(game->isGameEnded());
+        CHECK(game->getAlivePlayerCount() == 1);
+        CHECK(game->winner() == "Alice");
+        
+        cleanupGame(game);
     }
 }

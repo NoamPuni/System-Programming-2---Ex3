@@ -1,4 +1,3 @@
-// Governor.hpp
 #ifndef GOVERNOR_HPP
 #define GOVERNOR_HPP
 #include "Player.hpp"
@@ -10,13 +9,12 @@ class Governor : public Player
 {
 
 public:
-    Governor(const std::string& name);
-    ~Governor() = default;
+    Governor(const std::string& name); // Constructor for the Governor class.
+    ~Governor() = default; // Default destructor for Governor.
 
-    int tax(Game& game) override; // MODIFIED: Governor can tax 3 coins, returns amount
-    void blockTax(Game& game); // Governor can block tax actions
-    std::string role() const override; // Returns the role of the player
-    bool canBlockTax() const override; // Governor can block tax actions
+    int tax(Game& game) override; // Governor can tax 3 coins, returns amount.
+    std::string role() const override; // Returns the role of the player.
+    bool canBlockTax() const override; // Governor can block tax actions.
 };
 
 #endif

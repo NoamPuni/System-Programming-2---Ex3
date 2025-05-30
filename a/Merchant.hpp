@@ -7,13 +7,11 @@
 
 class Merchant : public Player {
 public:
-    Merchant(const std::string& name);   
+    Merchant(const std::string& name); // Constructor for the Merchant class.
 
-    // override
-    void onBeginTurn() override;
+    void onBeginTurn() override; // Defines actions taken at the beginning of the Merchant's turn.
 
-    // override
-    void onArrestedBy(Player& attacker, Game& game) override;
-    std::string role() const override; // Returns the role of the player
+    void onArrestedBy(Player& attacker, Game& game) override; // Defines how the Merchant reacts when arrested.
+    std::string role() const override; // Returns the role of the player.
 };
 #endif // MERCHANT_HPP

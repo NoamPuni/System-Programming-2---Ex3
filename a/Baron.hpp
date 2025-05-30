@@ -7,14 +7,13 @@
 
 class Baron : public Player {
 public:
-    Baron(const std::string& name);
+    Baron(const std::string& name); // Constructor for the Baron class.
 
+    void invest(); // Allows the Baron to invest.
+    std::string role() const override; // Returns the role of the player.
 
-    void invest(); // Baron can invest
-    std::string role() const override; // Returns the role of the player
-
-    //override methods
-    void onSanctionedBy(Player& attacker, Game& game) override;
+    // Override methods
+    void onSanctionedBy(Player& attacker, Game& game) override; // Defines how the Baron reacts when sanctioned.
 };
 
 #endif // BARON_HPP

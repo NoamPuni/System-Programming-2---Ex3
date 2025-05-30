@@ -1,4 +1,3 @@
-// Player.cpp
 #include <Player.hpp>
 #include <stdexcept>
 #include <iostream>
@@ -6,72 +5,87 @@
 #include <memory>
 #include <Game.hpp>
 
-Player::Player(const std::string& name) // Constructor initializes the player's name and sets default values for coins and status flags
+// Constructor initializes the player's name and sets default values for coins and status flags.
+Player::Player(const std::string& name) 
     : name(name), coins(0), is_sanctioned(false), is_alive(true), is_my_turn(false), is_last_one_arrested(false), is_prevented_from_arresting(false) {}
-//--------------------------------------------------------------------------------------------------------------------
-    std::string Player::getName() const {
+
+// Returns the player's name.
+std::string Player::getName() const {
     return name;
 }
+
+// Returns the player's current coin count.
 int Player::getCoins() const {
     return coins;
 }
 
+// Checks if the player is currently sanctioned.
 bool Player::isSanctioned() const {
     return is_sanctioned;
 }
 
+// Checks if the player is alive.
 bool Player::isAlive() const {
     return is_alive;
 }
 
+// Checks if it's currently this player's turn.
 bool Player::isMyTurn() const {
     return is_my_turn;
 }
 
+// Checks if this player was the last one to be arrested.
 bool Player::isLastOneArrested() const {
     return is_last_one_arrested;
 }
 
+// Checks if this player is prevented from performing an arrest this turn.
 bool Player::isPreventedFromArresting() const {
     return is_prevented_from_arresting;
 }
-//--------------------------------------------------------------------------------------------------------------------
+
+// Sets the player's coin count, adding or subtracting from the current amount.
 void Player::setCoins(int newCoins) {
-    std::cout << "setCoins called for " << name << " with " << newCoins << " coins." << std::endl;
-    // בדוק אם הניסיון להפחית מטבעות יוריד את הסכום מתחת לאפס
     if (coins + newCoins < 0) {
         throw std::runtime_error("Coins cannot be negative.");
     }
     coins += newCoins;
 }
 
+// Sets the 'last arrested' flag for the player.
 void Player::gotArrested(bool flag) {
     is_last_one_arrested = flag;
 }
 
+// Sanctions the player for a default duration.
 void Player::sanctionMe() {
     is_sanctioned = true;
-    sanctionTurnsRemaining = 1; // Default to 1 turn of sanction
+    sanctionTurnsRemaining = 1; // Default to 1 turn of sanction.
 }
 
+// Marks the player as eliminated (no longer alive).
 void Player::eliminateMe() {
     is_alive = false;
 }
 
+// Sets whether it is this player's turn.
 void Player::setTurn(bool val) {
     is_my_turn = val;
 }
 
+// Releases the player from sanction.
 void Player::releaseSanction() {
     is_sanctioned = false;
     sanctionTurnsRemaining = 0;
 }
 
+// Sets the number of turns a player will be sanctioned.
 void Player::setSanctionTurns(int turns) {
     sanctionTurnsRemaining = turns;
 }
 
-// actions that can be performed by the player
+// Actions that can be performed by the player.
+// Called at the beginning of the player's turn to update their status.
 void Player::onBeginTurn() {
     if (sanctionTurnsRemaining > 0) {
         sanctionTurnsRemaining--;
@@ -79,47 +93,51 @@ void Player::onBeginTurn() {
             releaseSanction();
         }
     }
-    is_prevented_from_arresting = false; // Reset prevention at the start of turn
+    is_prevented_from_arresting = false; // Reset prevention at the start of turn.
 }
 
-void Player::gather(Game& game) { // Added Game& game parameter
+// Allows the player to gather one coin.
+void Player::gather(Game& game) { 
     if (is_sanctioned) {
         throw std::runtime_error(name + " is sanctioned and can't gather.");
     }
-    setCoins(1); // Use the modified setCoins
+    setCoins(1); // Use the modified setCoins.
 }
 
-// MODIFIED: This function now returns the amount of coins the tax *would* give, but does not add them.
+// Returns the amount of coins a tax action would yield without adding them.
 int Player::tax(Game& game) { 
     if (is_sanctioned) {
         throw std::runtime_error(name + " is sanctioned and can't tax.");
     }
-    return 2; // Default player taxes 2 coins
+    return 2; // Default tax is 2 coins for a regular player.
 }
 
+// Allows the player to bribe, deducting coins immediately.
 void Player::bribe(Game& game) {
     if (getCoins() < 4) {
-        throw std::runtime_error(name + " does not have enough coins for bribe (needs 4).");
+        throw std::runtime_error(name + " does not have enough coins to bribe (needs 4).");
     }
-    setCoins(-4);
-    game.giveExtraTurns(); // Give extra turns for bribing
+    setCoins(-4); // Deduct coins immediately.
 }
 
+// Attempts a coup against a target player.
 bool Player::coup(Player* target, Game& game) {
+    if (!target) {
+        throw std::invalid_argument("Coup target cannot be null.");
+    }
     if (getCoins() < 7) {
         throw std::runtime_error(name + " does not have enough coins for coup (needs 7).");
     }
     if (!target->isAlive()) {
         throw std::runtime_error(target->getName() + " is already eliminated.");
     }
-    
-    setCoins(-7); // Deduct coins immediately
-    target->eliminateMe(); // Eliminate target immediately
-    // game.recordCoup(this, target); // Record for blocking if needed, but coup is usually unblockable in classic Coup
 
-    return true; // Coup successful
+    setCoins(-7); // Deduct coins immediately.
+    target->eliminateMe(); // Mark target for elimination.
+    return true; // Coup attempt was successful (coins deducted, target marked for elimination).
 }
 
+// Attempts to arrest a target player.
 bool Player::arrest(Player* target, Game& game) {
     if (!target->isAlive()) {
         throw std::runtime_error(target->getName() + " is already eliminated.");
@@ -128,26 +146,23 @@ bool Player::arrest(Player* target, Game& game) {
         throw std::runtime_error(name + " is prevented from arresting this turn.");
     }
     
-    // Check if target was recently arrested
     if (target->isLastOneArrested()) {
         throw std::runtime_error(target->getName() + " was recently arrested and cannot be arrested again.");
     }
 
     try {
-        target->onArrestedBy(*this, game); // Target handles the arrest effect (losing coin, possibly prevention)
-        setCoins(1); // Attacker gains 1 coin
-        target->gotArrested(); // Mark target as recently arrested
-        game.clearLastArrestedFlag(); // This needs to be called in game.nextTurn() not here
+        target->onArrestedBy(*this, game); // Target handles the arrest effect (losing coin, possibly prevention).
+        setCoins(1); // Attacker gains 1 coin.
+        target->gotArrested(); // Mark target as recently arrested.
         return true;
     } catch (const std::exception& e) {
-        // If target doesn't have enough coins, or any other arrest specific issue, it will throw here
         throw std::runtime_error("Arrest failed: " + std::string(e.what()));
     }
     return false;
 }
 
-
-void Player::sanction(Player* target, Game& game) { // Added Game& game
+// Allows the player to sanction a target player.
+void Player::sanction(Player* target, Game& game) { 
     if (is_sanctioned) {
         throw std::runtime_error(name + " is sanctioned and can't sanction.");
     }
@@ -162,34 +177,42 @@ void Player::sanction(Player* target, Game& game) { // Added Game& game
     }
 
     setCoins(-3);
-    target->onSanctionedBy(*this, game); // Target handles the sanction effect
+    target->onSanctionedBy(*this, game); // Target handles the sanction effect.
 }
 
-
-// Special abilities
+// Special abilities.
+// Default implementation: Player cannot block a coup.
 bool Player::canBlockCoup() const {
-    return false; // Default implementation, can be overridden by specific roles
-}
-bool Player::canUndoBribe() const {
-    return false; // Default implementation, can be overridden by specific roles
-}
-bool Player::canBlockTax() const {
-    return false; // Default implementation, can be overridden by specific roles
-}
-bool Player::canPreventArrest() const {
-    return false; // Default implementation, can be overridden by specific roles
+    return false; 
 }
 
-void Player::onSanctionedBy(Player& by, Game& game) { // Added Game& game
+// Default implementation: Player cannot undo a bribe.
+bool Player::canUndoBribe() const {
+    return false; 
+}
+
+// Default implementation: Player cannot block a tax.
+bool Player::canBlockTax() const {
+    return false; 
+}
+
+// Default implementation: Player cannot prevent an arrest.
+bool Player::canPreventArrest() const {
+    return false; 
+}
+
+// Handles the effects of being sanctioned by another player.
+void Player::onSanctionedBy(Player& by, Game& game) { 
     if (is_sanctioned) {
         throw std::runtime_error(name + " is already sanctioned.");
     }
     this->sanctionMe();
 }
 
-void Player::onArrestedBy(Player& attacker, Game& game) { // Added Game& game
+// Handles the effects of being arrested by an attacker.
+void Player::onArrestedBy(Player& attacker, Game& game) { 
     if (coins < 1) {
         throw std::runtime_error("Not enough coins to be arrested.");
     }
-    this->setCoins(-1); // Player loses 1 coin
+    this->setCoins(-1); // Player loses 1 coin.
 }

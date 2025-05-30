@@ -6,14 +6,13 @@
 
 class General : public Player {
     public:
-        General(const std::string& name);
+        General(const std::string& name); // Constructor for the General class.
 
-        void blockCoup(Player& targetPlayerOfCoup, Player& originalAttacker);//(-5)
+        void blockCoup(Player& targetPlayerOfCoup, Player& originalAttacker); // Allows the General to block a coup.
 
-        bool canBlockCoup() const override { return true; } // General can block coups
-        //override methods
-        std::string role() const override; // Returns the role of the player
-        void onArrestedBy(Player& attacker, Game& game) override;
+        bool canBlockCoup() const override { return true; } // General can block coups.
+        std::string role() const override; // Returns the role of the player.
+        void onArrestedBy(Player& attacker, Game& game) override; // Defines how the General reacts when arrested.
     };
 
 #endif // GENERAL_HPP

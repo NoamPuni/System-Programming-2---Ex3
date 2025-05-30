@@ -1,70 +1,63 @@
-// Player.hpp
 #pragma once
 #include <string>
 #include <memory>
 #include <stdexcept>
 
-class Game; // forward declaration
-
+class Game; // Forward declaration of the Game class.
 
 class Player {
 protected:
-    std::string name;
-    int coins = 0;
-    bool is_sanctioned = false;
-    bool is_alive = true;
-    bool is_my_turn = false;
-    bool is_last_one_arrested = false;
-    bool is_prevented_from_arresting = false; 
+    std::string name; // The player's name.
+    int coins = 0; // The player's current coin count.
+    bool is_sanctioned = false; // Flag indicating if the player is currently sanctioned.
+    bool is_alive = true; // Flag indicating if the player is alive in the game.
+    bool is_my_turn = false; // Flag indicating if it's currently this player's turn.
+    bool is_last_one_arrested = false; // Flag indicating if this player was the last one to be arrested.
+    bool is_prevented_from_arresting = false; // Flag indicating if this player is prevented from arresting this turn.
 
-    // Blocking system 
-    Player* lastActionPlayer = nullptr;
-    Player* coupTarget = nullptr; // for blocking coup
-    bool can_Block_Bribe = false;
-    bool can_Block_Tax = false;
-    bool can_Block_Coup = false;
-    int sanctionTurnsRemaining = 0;
+    int sanctionTurnsRemaining = 0; // Number of turns remaining for sanction.
+
 public:
-    Player(const std::string& name);
-    virtual ~Player() {}
+    Player(const std::string& name); // Constructor: Initializes a new player with a given name.
+    virtual ~Player() {} // Destructor: Virtual to ensure proper cleanup for derived classes.
 
-    // getters
-    std::string getName() const;
-    int getCoins() const;
-    bool isSanctioned() const;
-    bool isAlive() const;
-    bool isMyTurn() const;
-    bool isLastOneArrested() const;
-    bool isPreventedFromArresting() const; 
+    // Getters
+    std::string getName() const; // Returns the player's name.
+    int getCoins() const; // Returns the player's current coin count.
+    bool isSanctioned() const; // Checks if the player is currently sanctioned.
+    bool isAlive() const; // Checks if the player is alive.
+    bool isMyTurn() const; // Checks if it's currently this player's turn.
+    bool isLastOneArrested() const; // Checks if this player was the last one to be arrested.
+    bool isPreventedFromArresting() const; // Checks if this player is prevented from performing an arrest this turn.
 
-    //  setters and state changes
-    void setCoins(int newCoins);  
-    void gotArrested(bool flag = true);// Marks the player as arrested, default to true
-    void sanctionMe();
-    void eliminateMe();
-    void setTurn(bool val);
-    void gotPreventedFromArresting() { is_prevented_from_arresting = true; } // Marks the player as prevented from arresting
-    void restoreFromElimination() { is_alive = true; }
-    void releaseSanction();
-    void setSanctionTurns(int turns=1);
+    // Setters and state changes
+    void setCoins(int newCoins); // Sets the player's coin count.
+    void gotArrested(bool flag = true); // Marks the player as arrested (or not).
+    void sanctionMe(); // Sanctions the player.
+    void eliminateMe(); // Eliminates the player from the game.
+    void setTurn(bool val); // Sets whether it is this player's turn.
+    void gotPreventedFromArresting(); // Marks the player as prevented from arresting.
+    void restoreFromElimination(); // Restores the player from elimination.
+    void releaseSanction(); // Releases the player from sanction.
+    void setSanctionTurns(int turns = 1); // Sets the number of turns a player will be sanctioned.
 
-    // actions that can be performed by the player
-    virtual void onBeginTurn(); // called at the beginning of the player's turn, can be overridden by specific roles
-    virtual void gather(Game& game); // any player can gather coins, unless sanctioned - Added Game& game parameter
-    virtual int tax(Game& game);    // MODIFIED: Returns the amount of coins to be taxed. Doesn't add coins itself.
-    virtual void bribe(Game& game);  // דיפולט: -4; Judge יכול לבטל
-    virtual bool coup(Player* target, Game& game); // -7, מוציא שחקן מהמשחק; General can block
-    virtual bool arrest(Player* target, Game& game); // רווח לעצמי, נזק למטרה ;spy can prevent
-    virtual void sanction(Player* target, Game& game); // -3, מסנדק שחקן - Added Game& game parameter
+    // Actions that can be performed by the player
+    virtual void onBeginTurn(); // Called at the beginning of the player's turn.
+    virtual void gather(Game& game); // Allows the player to gather coins.
+    virtual bool arrest(Player* target, Game& game); // Allows the player to attempt an arrest.
+    virtual void sanction(Player* target, Game& game); // Allows the player to sanction another player.
+    virtual int tax(Game& game); // Returns the amount of coins a tax action would yield.
+    virtual void bribe(Game& game); // Allows the player to bribe.
+    virtual bool coup(Player* target, Game& game); // Allows the player to attempt a coup.
 
-    // יכולות מיוחדות שנבדקות במשחק
-    virtual std::string role() const = 0; // returns the role of the player, e.g., "Governor", "Judge", etc.
+    // Special abilities checked by the game
+    virtual std::string role() const = 0; // Returns the player's role (pure virtual).
 
-    // special abilities that can be overridden by specific roles
-    virtual bool canBlockCoup() const;
-    virtual bool canUndoBribe() const;
-    virtual bool canBlockTax() const;
-    virtual bool canPreventArrest() const;
-    virtual void onSanctionedBy(Player& by, Game& game); // Added Game& game
-    virtual void onArrestedBy(Player& attacker, Game& game); // Added Game& game
+    // Special abilities that can be overridden by specific roles
+    virtual bool canBlockCoup() const; // Checks if the player can block a coup.
+    virtual bool canUndoBribe() const; // Checks if the player can undo a bribe.
+    virtual bool canBlockTax() const; // Checks if the player can block a tax.
+    virtual bool canPreventArrest() const; // Checks if the player can prevent an arrest.
+    virtual void onSanctionedBy(Player& by, Game& game); // Handles the effects of being sanctioned by another player.
+    virtual void onArrestedBy(Player& attacker, Game& game); // Handles the effects of being arrested by an attacker.
 };

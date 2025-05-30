@@ -1,4 +1,3 @@
-// Game.hpp
 #ifndef GAME_HPP
 #define GAME_HPP
 
@@ -9,99 +8,68 @@
 
 class Game {
 private:
-    std::vector<Player*> _players;
-    size_t currentTurn;
-    bool gameEnded;
-    std::string _winnerName;
+    std::vector<Player*> _players; // Stores all players in the game.
+    size_t currentTurn; // Index of the current player's turn.
+    bool gameEnded; // Flag indicating if the game has ended.
+    std::string _winnerName; // Name of the winning player.
+    
+    int extraTurnsRemaining = 0; // Number of extra turns remaining for the current player.
 
-    // Blocking system - used to manage actions that can be blocked or undone
-    Player* lastActionPlayer = nullptr;
-    Player* coupTarget = nullptr; // for blocking coup
-    int lastTaxAmount = 0; // NEW: Stores the amount of coins from the last tax action
-    bool canBlockBribe = false;
-    bool canBlockTax = false;
-    bool canBlockCoup = false;
+    mutable std::mt19937 rng; // Random number generator for game mechanics.
 
-    // Extra turns system for bribe
-    int extraTurnsRemaining = 0; 
-
-    // Random number generator for role assignment
-    mutable std::mt19937 rng;
-
-    // Helper method to create player with specific role
-    Player* createPlayerWithRole(const std::string& name, const std::string& role);
+    Player* createPlayerWithRole(const std::string& name, const std::string& role); // Helper to create a player with a specific role.
 
 public:
-    // Constructor and Destructor
-    Game();
-    ~Game();
+    Game(); // Constructor for the Game class.
+    ~Game(); // Destructor for the Game class.
 
-    // Game initialization methods
-    void initializeGame(const std::vector<std::string>& playerNames);
-    bool canStartGame() const; // Check if game can start (2-6 players)
+    void initializeGame(const std::vector<std::string>& playerNames); // Initializes the game with player names and roles.
+    bool canStartGame() const; // Checks if the game has enough players to start.
 
-    // Core game methods
-    void addPlayer(Player* player);
-    void nextTurn();
-    std::string turn() const;
-    std::vector<std::string> players() const;
-    std::string winner() const;
+    void addPlayer(Player* player); // Adds a player to the game.
+    void nextTurn(); // Advances the game to the next turn.
+    std::string turn() const; // Returns a string indicating whose turn it is.
+    std::vector<std::string> players() const; // Returns a list of all player names.
+    std::string winner() const; // Returns the name of the game winner.
 
-    // Additional utility methods
-    bool isGameEnded() const { return gameEnded; }
-    size_t getPlayerCount() const { return _players.size(); }
-    size_t getAlivePlayerCount() const;
+    bool isGameEnded() const { return gameEnded; } // Checks if the game has concluded.
+    size_t getPlayerCount() const { return _players.size(); } // Returns the total number of players.
+    size_t getAlivePlayerCount() const; // Returns the count of players who are still alive.
     
-    // Get current player (for game logic)
-    Player* getCurrentPlayer() const;
+    Player* getCurrentPlayer() const; // Returns a pointer to the current player.
     
-    // Blocking methods
-    void recordBribe(Player* player);
-    void recordTax(Player* player, int amount); // MODIFIED: Added amount
-    void recordCoup(Player* player, Player* target);
+    void recordBribe(Player* player); // Records a bribe action.
+    void recordTax(Player* player, int amount); // Records a tax action with the amount.
+    void recordCoup(Player* player, Player* target); // Records a coup action.
     
-    bool tryBlockBribe(Player* blocker);
-    bool tryBlockTax(Player* blocker); // No need for amount here, it's stored
-    bool tryBlockCoup(Player* blocker);
+    bool tryBlockBribe(Player* blocker); // Attempts to block a bribe action.
+    bool tryBlockTax(Player* blocker); // Attempts to block a tax action.
+    bool tryBlockCoup(Player* blocker); // Attempts to block a coup action.
     
-    void clearBlockableActions(); // Called in nextTurn()
-    
-    // Method to clear last arrested flag from all players
-    void clearLastArrestedFlag();
+    void clearLastArrestedFlag(); // Clears the 'last arrested' flag for all players.
 
-    // Extra turns methods
-    void giveExtraTurns(int turns = 2); // gives extra turns to the player who bribed
-    bool hasExtraTurns() const { return extraTurnsRemaining > 0; }
-    int getExtraTurnsRemaining() const { return extraTurnsRemaining; }
+    void giveExtraTurns(int turns = 2); // Grants extra turns to the current player.
+    bool hasExtraTurns() const { return extraTurnsRemaining > 0; } // Checks if extra turns are remaining.
+    int getExtraTurnsRemaining() const { return extraTurnsRemaining; } // Returns the number of remaining extra turns.
 
-    // For blocking mechanism
-    Player* _lastActionPerformer = nullptr;
-    std::string _lastActionType = "";
-    Player* _lastActionTarget = nullptr; // Useful for actions like Coup, Arrest, Sanction
-    
-    // Flags for blockable actions (can be used to quickly check if a block is possible)
-    bool canBlockBribeFlag = false; // Renamed to avoid confusion with method name
-    bool canBlockTaxFlag = false; // Assuming this exists for Governor
-    bool canBlockCoupFlag = false; // Assuming this exists for General
+    Player* _lastActionPerformer = nullptr; // Stores the player who performed the last action.
+    std::string _lastActionType = ""; // Stores the type of the last action.
+    Player* _lastActionTarget = nullptr; // Stores the target of the last action.
+    int lastTaxAmount = 0; // Stores the amount of the last tax action.
+    void setLastTaxAmount(int amount) { lastTaxAmount = amount; } // Sets the amount of the last tax action.
 
-    // Blocking related methods
-    void recordAction(Player* performer, const std::string& actionType, Player* target = nullptr);
-    void clearLastAction();
-    Player* tryBlock(const std::string& actionType, Player* performer, Player* target);
+    void recordAction(Player* performer, const std::string& actionType, Player* target = nullptr); // Records general action details.
+    void clearLastAction(); // Clears the record of the last action.
+    Player* tryBlock(const std::string& actionType, Player* performer, Player* target); // Attempts to find a player who can block a given action.
+    int getLastTaxAmount() const { return lastTaxAmount; } // Returns the amount of the last tax action.
     
-    // Get player roles information
-    std::vector<std::pair<std::string, std::string>> getPlayersWithRoles() const;
+    std::vector<std::pair<std::string, std::string>> getPlayersWithRoles() const; // Returns a list of players with their roles.
     
-    // Prevent copy constructor and assignment operator
-    Game(const Game&) = delete;
-    Game& operator=(const Game&) = delete;
+    Game(const Game&) = delete; // Prevents copying the Game object.
+    Game& operator=(const Game&) = delete; // Prevents assigning the Game object.
 
-    // Get all players (add this method)
-    const std::vector<Player*> getAllPlayers() const { return _players; }
+    const std::vector<Player*> getAllPlayers() const { return _players; } // Returns all players in the game.
 
-    
-    bool getCanBlockTax() const { return canBlockTax; }
-    int getLastTaxAmount() const { return lastTaxAmount; }
 };
 
-#endif
+#endif // GAME_HPP
